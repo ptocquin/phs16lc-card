@@ -22,6 +22,8 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
 <div id="cards3"></div>
 <div class="label">Repli : device "SPOT 9" dont les entités n'ont PAS de device_id (match par friendly_name)</div>
 <div id="cards4"></div>
+<div class="label">Carte groupe : device "Serre 1 Nord" + group_id (bouton save -> phs16lc.save group:...)</div>
+<div id="cards5"></div>
 
 <script>
   // Stub de <ha-card> (dans HA, le frontend le fournit ; ici on l'imite).
@@ -50,6 +52,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       dev_spot3: { id: "dev_spot3", name: "SPOT 3", name_by_user: null },
       dev_spot7: { id: "dev_spot7", name: "SPOT 7", name_by_user: "Luminaire nord" },
       dev_spot9: { id: "dev_spot9", name: "SPOT 9", name_by_user: null },
+      dev_g1: { id: "dev_g1", name: "Serre 1 Nord", name_by_user: null },
     },
     entities: {
       "light.spot_3": E("light.spot_3", "dev_spot3", null),
@@ -66,6 +69,8 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       // SPOT 9 : pas de device_id exposé -> repli par friendly_name
       "light.spot_9": { entity_id: "light.spot_9", device_id: null, platform: "phs16lc", unique_id: "cfg_spot_9_light" },
       "select.spot_9_recette": { entity_id: "select.spot_9_recette", device_id: null, platform: "phs16lc", translation_key: "recipe", unique_id: "cfg_spot_9_recipe" },
+      "light.serre_1_nord": E("light.serre_1_nord", "dev_g1", null),
+      "select.serre_1_nord_recette": E("select.serre_1_nord_recette", "dev_g1", "recipe"),
     },
     states: {
       "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200 } },
@@ -80,6 +85,8 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "binary_sensor.spot_7_online": { entity_id: "binary_sensor.spot_7_online", state: "off", attributes: {} },
       "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128 } },
       "select.spot_9_recette": { entity_id: "select.spot_9_recette", state: "croissance.json", attributes: { options: ["croissance.json"] } },
+      "light.serre_1_nord": { entity_id: "light.serre_1_nord", state: "on", attributes: { friendly_name: "Serre 1 Nord", brightness: 180, members: [1, 2, 3], online: 2 } },
+      "select.serre_1_nord_recette": { entity_id: "select.serre_1_nord_recette", state: "floraison.json", attributes: { options: ["croissance.json", "floraison.json"] } },
     },
     callService(domain, service, data) {
       console.log("callService", domain, service, data);
@@ -107,23 +114,27 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       if (domain === "button" && service === "press") {
         console.log("NVM sauvegardée (mock)");
       }
+      if (domain === "phs16lc" && service === "save") {
+        console.log("phs16lc.save", data);
+      }
     },
   };
 </script>
 <script src="../dist/phs16lc-card.js"></script>
 <script>
-  function makeCard(config, mountId, expanded) {
-    const card = document.createElement("phs16lc-spot-card");
+  function makeCard(tag, config, mountId, expanded) {
+    const card = document.createElement(tag);
     card.setConfig(config);
     card.hass = window.hass;
     if (expanded) { card._expanded = true; card._render(true); }
     document.getElementById(mountId).appendChild(card);
     return card;
   }
-  makeCard({ device: "SPOT 3" }, "cards", true);   // panneau déplié
-  makeCard({ entity: "light.spot_7" }, "cards2");
-  makeCard({ device: "SPOT 99" }, "cards3");
-  makeCard({ device: "SPOT 9" }, "cards4");        // repli friendly_name
+  makeCard("phs16lc-spot-card", { device: "SPOT 3" }, "cards", true);   // panneau déplié
+  makeCard("phs16lc-spot-card", { entity: "light.spot_7" }, "cards2");
+  makeCard("phs16lc-spot-card", { device: "SPOT 99" }, "cards3");
+  makeCard("phs16lc-spot-card", { device: "SPOT 9" }, "cards4");        // repli friendly_name
+  makeCard("phs16lc-group-card", { device: "Serre 1 Nord", group_id: "serre_1_nord" }, "cards5", true);
 </script>
 </body>
 </html>

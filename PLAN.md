@@ -13,6 +13,12 @@
 > `/local/phs16lc-card.js`), ressource + carte à ajouter via l'UI. Note : le lien
 > série de l'instance de dev était cassé (pty mort) au 2026-11-22 — à repointer via
 > `fake_spot.py` + options flow avant un test avec données vivantes.
+> 2026-11-22 — P3 fait : `custom:phs16lc-group-card` (même fichier JS) — compact :
+> on/off, recette, luminosité ~mA, puce membres en ligne (attributs optionnels
+> `members`/`online` du light du groupe, backend v1.5.3) ; dépliable : slider
+> luminosité groupe, select recette, « Sauvegarder NVM (tout le groupe) » via
+> `phs16lc.save address="group:<group_id>"` (bouton désactivé sans `group_id`).
+> Repli de résolution identique à la carte SPOT. Harnais : device groupe mocké.
 
 Carte frontend pour les luminaires PHS16-LC : vue compacte par SPOT et par groupe
 de luminaires, avec accès rapide aux actions principales (on/off, recette,

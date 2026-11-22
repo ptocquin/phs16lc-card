@@ -31,6 +31,10 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     save: "Sauvegarder NVM",
+    saveAll: "Sauvegarder NVM (tout le groupe)",
+    members: "membres",
+    onlineCount: "{on}/{total} en ligne",
+    needGroupId: "Config : ajouter `group_id:` pour la sauvegarde NVM du groupe",
     configError:
       'Config invalide : fournir `device:` (ex. "SPOT 3") ou `entity:` (ex. "light.spot_3").',
     deviceNotFound: "Device introuvable",
@@ -58,6 +62,10 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     save: "Save NVM",
+    saveAll: "Save NVM (whole group)",
+    members: "members",
+    onlineCount: "{on}/{total} online",
+    needGroupId: "Config: add `group_id:` to save the group NVM",
     configError:
       'Invalid config: provide `device:` (e.g. "SPOT 3") or `entity:` (e.g. "light.spot_3").',
     deviceNotFound: "Device not found",
@@ -506,10 +514,332 @@ class Phs16lcSpotCard extends HTMLElement {
 
 customElements.define("phs16lc-spot-card", Phs16lcSpotCard);
 
+// ---------------------------------------------------------------------------
+// Carte groupe : device « groupe de luminaires » (identifiers phs16lc "group_<id>").
+// Config :
+//   type: custom:phs16lc-group-card
+//   device: Serre 1 Nord     # nom du device groupe (ou `entity: light.<groupe>`)
+//   group_id: serre_1_nord   # pour phs16lc.save address="group:<id>"
+// Attributs optionnels du light du groupe (backend v1.5.3+) : `members` (liste
+// d'adresses) et `online` (nb de membres en ligne) -> puce « 2/3 en ligne ».
+// ---------------------------------------------------------------------------
+
+const MDI_LIGHTBULB_GROUP =
+  "M7 2a5 5 0 0 0-3 9.3c.5.4.8 1 .8 1.7v1h4.4v-1c0-.7.3-1.3.8-1.7A5 5 0 0 0 7 2zM5 15h4v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-1zm10-3a5 5 0 0 0-3 9.3c.5.4.8 1 .8 1.7v1h4.4v-1c0-.7.3-1.3.8-1.7A5 5 0 0 0 15 9a5 5 0 0 0 0 3zM13 15h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1z";
+
+class Phs16lcGroupCard extends HTMLElement {
+  constructor() {
+    super();
+    this._config = null;
+    this._hass = null;
+    this._device = null;
+    this._ents = {};
+    this._error = null;
+    this._expanded = false;
+    this._built = false;
+    this._sig = "";
+  }
+
+  static getStubConfig() {
+    return { device: "Serre 1 Nord", group_id: "serre_1_nord" };
+  }
+
+  getCardSize() {
+    return this._expanded ? 4 : 2;
+  }
+
+  setConfig(config) {
+    if (!config || (!config.device && !config.entity)) {
+      throw new Error(I18N.fr.configError + " / " + I18N.en.configError);
+    }
+    this._config = config;
+    this._ents = {};
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._resolve();
+    this._render();
+  }
+
+  _resolve() {
+    const hass = this._hass;
+    this._error = null;
+    this._device = null;
+    this._ents = {};
+    if (this._config.entity) {
+      this._ents.light = this._config.entity;
+      return;
+    }
+    const wanted = String(this._config.device).toLowerCase();
+    const device = Object.values(hass.devices || {}).find(
+      (d) =>
+        d.id === this._config.device ||
+        (d.name && d.name.toLowerCase() === wanted) ||
+        (d.name_by_user && d.name_by_user.toLowerCase() === wanted)
+    );
+    if (!device) {
+      this._error = _t(hass, "deviceNotFound") + " : " + this._config.device;
+      console.warn("[phs16lc-card] devices vus :", Object.values(hass.devices || {}).map((d) => d.name));
+      return;
+    }
+    this._device = device;
+    const dname = device.name_by_user || device.name;
+    const ents = Object.values(hass.entities || {});
+    let mine = ents.filter((e) => e.device_id === device.id);
+    if (!mine.length) {
+      mine = ents.filter((e) => {
+        const s = hass.states && hass.states[e.entity_id];
+        return s && s.attributes && s.attributes.friendly_name === dname;
+      });
+    }
+    const byDomain = (domain) => mine.filter((e) => e.entity_id.startsWith(domain + "."));
+    this._ents.light = _pick(byDomain("light"), null, null);
+    if (!this._ents.light) {
+      const byName = Object.values(hass.states || {}).find(
+        (s) => s.entity_id.startsWith("light.") && s.attributes && s.attributes.friendly_name === dname
+      );
+      if (byName) this._ents.light = byName.entity_id;
+    }
+    this._ents.recipe = _pick(byDomain("select"), "recipe", "recipe");
+    if (!this._ents.light) {
+      this._error = _t(hass, "entityNotFound") + " (light.*) : " + this._config.device;
+      console.warn("[phs16lc-card] groupe sans light", { device: dname, entities: mine.map((e) => e.entity_id) });
+    }
+  }
+
+  _state(role) {
+    const id = this._ents[role];
+    return id && this._hass.states ? this._hass.states[id] : null;
+  }
+
+  _toggle() {
+    const light = this._state("light");
+    if (!light) return;
+    this._hass.callService("light", light.state === "on" ? "turn_off" : "turn_on", {
+      entity_id: this._ents.light,
+    });
+  }
+
+  _setBrightness(ev) {
+    const v = parseInt(ev.target.value, 10);
+    if (v === 0) {
+      this._hass.callService("light", "turn_off", { entity_id: this._ents.light });
+    } else {
+      this._hass.callService("light", "turn_on", { entity_id: this._ents.light, brightness: v });
+    }
+  }
+
+  _selectRecipe(ev) {
+    if (!this._ents.recipe) return;
+    this._hass.callService("select", "select_option", {
+      entity_id: this._ents.recipe,
+      option: ev.target.value,
+    });
+  }
+
+  _saveAll() {
+    const gid = this._config.group_id;
+    if (!gid) return;
+    this._hass.callService("phs16lc", "save", { address: "group:" + gid });
+  }
+
+  _moreInfo() {
+    if (!this._ents.light) return;
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", {
+        detail: { entityId: this._ents.light },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _signature() {
+    const ids = Object.values(this._ents).filter(Boolean);
+    return JSON.stringify(
+      ids.map((id) => {
+        const s = this._hass.states[id];
+        if (!s) return null;
+        const a = s.attributes || {};
+        return [s.state, a.brightness, a.options, a.members, a.online];
+      })
+    );
+  }
+
+  _render(force) {
+    if (!this._hass || !this._config) return;
+    const sig = this._signature();
+    if (!force && this._built && sig === this._sig) return;
+    this._sig = sig;
+    this._built = true;
+    const hass = this._hass;
+    const lang = (hass.locale && hass.locale.language) || "en";
+    const light = this._state("light");
+    const name =
+      (light && light.attributes && light.attributes.friendly_name) ||
+      (this._device && (this._device.name_by_user || this._device.name)) ||
+      this._ents.light ||
+      "PHS16-LC";
+
+    const card = document.createElement("ha-card");
+    card.style.padding = "12px 16px";
+    card.style.cursor = "pointer";
+    card.addEventListener("click", () => this._moreInfo());
+
+    if (this._error || !light) {
+      const msg = document.createElement("div");
+      msg.style.color = "var(--error-color, #db4437)";
+      msg.textContent = this._error || _t(hass, "entityNotFound");
+      card.appendChild(msg);
+      this.replaceChildren(card);
+      return;
+    }
+
+    const on = light.state === "on";
+    const iconColor = on
+      ? "var(--state-light-active-color, #ffc107)"
+      : "var(--disabled-text-color, #9e9e9e)";
+    const brightness = light.attributes && light.attributes.brightness;
+    const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
+
+    // Puces : recette, luminosité (~mA), membres en ligne (attributs optionnels).
+    const recipe = this._state("recipe");
+    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipe && recipe.state && recipe.state !== "unknown" ? recipe.state : _t(hass, "noRecipe")}</span>`;
+    const brightChip =
+      brightness != null
+        ? `<span>${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})</span>`
+        : "";
+    const attrs = light.attributes || {};
+    const membersChip = Array.isArray(attrs.members)
+      ? `<span>${attrs.online != null ? _t(hass, "onlineCount").replace("{on}", attrs.online).replace("{total}", attrs.members.length) : attrs.members.length + " " + _t(hass, "members")}</span>`
+      : "";
+
+    card.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px;">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="${iconColor}" aria-hidden="true">
+          <path d="${MDI_LIGHTBULB_GROUP}"/>
+        </svg>
+        <div style="flex:1; min-width:0;">
+          <div class="phs-name" style="font-weight:500; color:var(--primary-text-color); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+          <div style="font-size:12px; color:var(--secondary-text-color); display:flex; gap:10px; flex-wrap:wrap;">
+            ${recipeChip}${brightChip}${membersChip}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <button class="phs-power" title="${on ? _t(hass, "powerOff") : _t(hass, "powerOn")}"
+            style="border:none; background:none; cursor:pointer; padding:4px; color:${iconColor};">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+              <path d="${MDI_POWER}"/>
+            </svg>
+          </button>
+          <button class="phs-expand" title="${this._expanded ? _t(hass, "collapse") : _t(hass, "expand")}"
+            style="border:none; background:none; cursor:pointer; padding:4px; color:var(--secondary-text-color); transform:${this._expanded ? "rotate(180deg)" : "none"};">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+              <path d="${MDI_CHEVRON_DOWN}"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="phs-details" style="display:${this._expanded ? "block" : "none"}; margin-top:12px; border-top:1px solid var(--divider-color, #e0e0e0); padding-top:12px;"></div>`;
+    card.querySelector(".phs-name").textContent = name;
+    card.querySelector(".phs-power").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._toggle();
+    });
+    card.querySelector(".phs-expand").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._expanded = !this._expanded;
+      this._render(true);
+    });
+
+    if (this._expanded) this._renderDetails(card.querySelector(".phs-details"), hass, lang, light);
+    this.replaceChildren(card);
+  }
+
+  _renderDetails(root, hass, lang, light) {
+    const brightness =
+      light.attributes && light.attributes.brightness != null
+        ? light.attributes.brightness
+        : light.state === "on"
+          ? 255
+          : 0;
+    const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
+
+    let html = `
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "brightness")}</span>
+        <input class="phs-brightness" type="range" min="0" max="255" step="1" value="${brightness}"
+          style="flex:1; accent-color:var(--primary-color);">
+        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
+      </div>`;
+
+    const recipe = this._state("recipe");
+    if (recipe) {
+      const options = (recipe.attributes && recipe.attributes.options) || [];
+      const opts = options
+        .map((o) => `<option value="${o}"${o === recipe.state ? " selected" : ""}>${o}</option>`)
+        .join("");
+      html += `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "recipe")}</span>
+        <select class="phs-recipe" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">${opts}</select>
+      </div>`;
+    }
+
+    const gid = this._config.group_id;
+    html += `
+      <div style="margin-top:12px; text-align:right;">
+        <button class="phs-save" ${gid ? "" : "disabled"} title="${gid ? "" : _t(hass, "needGroupId")}"
+          style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px;">
+          ${_t(hass, "saveAll")}
+        </button>
+      </div>`;
+
+    root.innerHTML = html;
+
+    const bSlider = root.querySelector(".phs-brightness");
+    const bVal = root.querySelector(".phs-brightness-val");
+    const paintB = () => {
+      const v = parseInt(bSlider.value, 10);
+      bVal.textContent = v === 0 ? _t(hass, "off") : `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+    };
+    paintB();
+    bSlider.addEventListener("input", paintB);
+    bSlider.addEventListener("click", (ev) => ev.stopPropagation());
+    bSlider.addEventListener("change", (ev) => {
+      ev.stopPropagation();
+      this._setBrightness(ev);
+    });
+
+    const sel = root.querySelector(".phs-recipe");
+    if (sel) {
+      sel.addEventListener("click", (ev) => ev.stopPropagation());
+      sel.addEventListener("change", (ev) => {
+        ev.stopPropagation();
+        this._selectRecipe(ev);
+      });
+    }
+
+    const saveBtn = root.querySelector(".phs-save");
+    saveBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._saveAll();
+    });
+  }
+}
+
+customElements.define("phs16lc-group-card", Phs16lcGroupCard);
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "phs16lc-spot-card",
   name: "PHS16-LC — SPOT",
   description: "Carte compacte d'un luminaire PHS16-LC (intégration phs16lc).",
+  preview: true,
+});
+window.customCards.push({
+  type: "phs16lc-group-card",
+  name: "PHS16-LC — Groupe",
+  description: "Carte d'un groupe de luminaires PHS16-LC (intégration phs16lc).",
   preview: true,
 });
