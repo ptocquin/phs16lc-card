@@ -146,12 +146,30 @@ class Phs16lcSpotCard extends HTMLElement {
     );
     if (!device) {
       this._error = _t(hass, "deviceNotFound") + " : " + this._config.device;
+      console.warn("[phs16lc-card] devices vus :", Object.values(hass.devices || {}).map((d) => d.name));
       return;
     }
     this._device = device;
-    const mine = Object.values(hass.entities || {}).filter((e) => e.device_id === device.id);
+    const dname = device.name_by_user || device.name;
+    const ents = Object.values(hass.entities || {});
+    let mine = ents.filter((e) => e.device_id === device.id);
+    // Repli : si le registry frontend n'expose pas device_id, retrouver les entités
+    // du device par friendly_name (l'entité principale du device porte son nom).
+    if (!mine.length) {
+      mine = ents.filter((e) => {
+        const s = hass.states && hass.states[e.entity_id];
+        return s && s.attributes && s.attributes.friendly_name === dname;
+      });
+    }
     const byDomain = (domain) => mine.filter((e) => e.entity_id.startsWith(domain + "."));
     this._ents.light = _pick(byDomain("light"), null, null);
+    // Repli ultime : convention light.<slug du nom du device> dans les états.
+    if (!this._ents.light) {
+      const byName = Object.values(hass.states || {}).find(
+        (s) => s.entity_id.startsWith("light.") && s.attributes && s.attributes.friendly_name === dname
+      );
+      if (byName) this._ents.light = byName.entity_id;
+    }
     this._ents.online = _pick(byDomain("binary_sensor"), "spot_online", "online");
     this._ents.tempCpu = _pick(byDomain("sensor"), "temp_cpu", "cpu");
     this._ents.tempLed1 = _pick(byDomain("sensor"), "temp_led1", "led1");
@@ -162,6 +180,14 @@ class Phs16lcSpotCard extends HTMLElement {
     this._ents.saveNvm = _pick(byDomain("button"), "save_nvm", "save");
     if (!this._ents.light) {
       this._error = _t(hass, "entityNotFound") + " (light.*) : " + this._config.device;
+      console.warn("[phs16lc-card] entité light introuvable", {
+        device: dname,
+        deviceId: device.id,
+        entitiesDansDevice: mine.map((e) => e.entity_id),
+        nbEntities: ents.length,
+        sampleEntities: ents.slice(0, 30).map((e) => e.entity_id),
+        lightsDansStates: Object.keys(hass.states || {}).filter((k) => k.startsWith("light.")),
+      });
     }
   }
 

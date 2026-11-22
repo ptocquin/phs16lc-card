@@ -20,6 +20,8 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
 <div id="cards2"></div>
 <div class="label">Config invalide (device inconnu) → erreur rendue dans la carte</div>
 <div id="cards3"></div>
+<div class="label">Repli : device "SPOT 9" dont les entités n'ont PAS de device_id (match par friendly_name)</div>
+<div id="cards4"></div>
 
 <script>
   // Stub de <ha-card> (dans HA, le frontend le fournit ; ici on l'imite).
@@ -47,6 +49,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
     devices: {
       dev_spot3: { id: "dev_spot3", name: "SPOT 3", name_by_user: null },
       dev_spot7: { id: "dev_spot7", name: "SPOT 7", name_by_user: "Luminaire nord" },
+      dev_spot9: { id: "dev_spot9", name: "SPOT 9", name_by_user: null },
     },
     entities: {
       "light.spot_3": E("light.spot_3", "dev_spot3", null),
@@ -60,6 +63,9 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "button.spot_3_sauvegarder_nvm": E("button.spot_3_sauvegarder_nvm", "dev_spot3", "save_nvm"),
       "light.spot_7": E("light.spot_7", "dev_spot7", null),
       "binary_sensor.spot_7_online": E("binary_sensor.spot_7_online", "dev_spot7", "spot_online"),
+      // SPOT 9 : pas de device_id exposé -> repli par friendly_name
+      "light.spot_9": { entity_id: "light.spot_9", device_id: null, platform: "phs16lc", unique_id: "cfg_spot_9_light" },
+      "select.spot_9_recette": { entity_id: "select.spot_9_recette", device_id: null, platform: "phs16lc", translation_key: "recipe", unique_id: "cfg_spot_9_recipe" },
     },
     states: {
       "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200 } },
@@ -72,6 +78,8 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "select.spot_3_groupe": { entity_id: "select.spot_3_groupe", state: "canaux_1_8", attributes: { options: ["canaux_1_8", "canaux_9_16"] } },
       "light.spot_7": { entity_id: "light.spot_7", state: "off", attributes: { friendly_name: "Luminaire nord" } },
       "binary_sensor.spot_7_online": { entity_id: "binary_sensor.spot_7_online", state: "off", attributes: {} },
+      "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128 } },
+      "select.spot_9_recette": { entity_id: "select.spot_9_recette", state: "croissance.json", attributes: { options: ["croissance.json"] } },
     },
     callService(domain, service, data) {
       console.log("callService", domain, service, data);
@@ -115,6 +123,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
   makeCard({ device: "SPOT 3" }, "cards", true);   // panneau déplié
   makeCard({ entity: "light.spot_7" }, "cards2");
   makeCard({ device: "SPOT 99" }, "cards3");
+  makeCard({ device: "SPOT 9" }, "cards4");        // repli friendly_name
 </script>
 </body>
 </html>
