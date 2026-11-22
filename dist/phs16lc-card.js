@@ -640,33 +640,60 @@ class Phs16lcGroupCard extends HTMLElement {
     this._resolveMembers();
   }
 
-  // Membres du groupe : devices portant le label `<group_id>` (posé par
-  // groups.sync_group_registries sur chaque SPOT membre), hors device du groupe.
+  // Membres du groupe. Source de vérité : attribut `members` (adresses) du light du
+  // groupe, exposé par l'intégration (>= v1.5.3). Repli : label `<group_id>` sur les
+  // devices — jamais retiré par la synchro registry (voir groups.py), donc périmé
+  // après un retrait de membre.
   _resolveMembers() {
     this._members = [];
-    const gid = this._config.group_id;
     const hass = this._hass;
-    if (!gid || !hass.devices) return;
     const ents = Object.values(hass.entities || {});
-    for (const d of Object.values(hass.devices)) {
-      if (this._device && d.id === this._device.id) continue; // le device groupe lui-même
+    const devs = Object.values(hass.devices || {});
+    const bySuffix = (suffix) => ents.find((e) => (e.unique_id || "").endsWith(suffix));
+    const light = this._state("light");
+    const attrs = (light && light.attributes) || {};
+
+    if (Array.isArray(attrs.members) && attrs.members.length) {
+      for (const addr of attrs.members) {
+        const l =
+          bySuffix(`_spot_${addr}_light`) ||
+          ents.find((e) => e.entity_id === `light.spot_${addr}`);
+        const o = bySuffix(`_spot_${addr}_online`);
+        const lReg = l && ents.find((e) => e.entity_id === l.entity_id);
+        const dev = lReg && lReg.device_id ? devs.find((d) => d.id === lReg.device_id) : null;
+        this._members.push({
+          address: addr,
+          device: dev || null,
+          light: l ? l.entity_id : null,
+          online: o ? o.entity_id : null,
+        });
+      }
+      return;
+    }
+
+    // Repli (ancien backend sans attribut `members`) : labels, hors device du groupe.
+    const gid = this._config.group_id;
+    if (!gid) return;
+    for (const d of devs) {
+      if (this._device && d.id === this._device.id) continue;
       if (!(d.labels || []).includes(gid)) continue;
-      let light = ents.find((e) => e.device_id === d.id && e.entity_id.startsWith("light."));
-      if (!light) {
+      let l = ents.find((e) => e.device_id === d.id && e.entity_id.startsWith("light."));
+      if (!l) {
         const s = Object.values(hass.states || {}).find(
           (x) =>
             x.entity_id.startsWith("light.") &&
             x.attributes &&
             x.attributes.friendly_name === (d.name_by_user || d.name)
         );
-        if (s) light = s;
+        if (s) l = s;
       }
       const online = ents.find(
         (e) => e.device_id === d.id && e.entity_id.startsWith("binary_sensor.")
       );
       this._members.push({
+        address: null,
         device: d,
-        light: light ? light.entity_id : null,
+        light: l ? l.entity_id : null,
         online: online ? online.entity_id : null,
       });
     }
@@ -763,8 +790,8 @@ class Phs16lcGroupCard extends HTMLElement {
     const memberStates = (this._members || []).map((m) => {
       const l = m.light && this._hass.states[m.light];
       const o = m.online && this._hass.states[m.online];
-      // inclure id + labels : un changement de membres doit re-rendre même si les états sont identiques
-      return [m.light, (m.device.labels || []).join(","), l && l.state, o && o.state];
+      // inclure id/adresse : un changement de membres doit re-rendre même si les états sont identiques
+      return [m.light, m.address, l && l.state, o && o.state];
     });
     return JSON.stringify([
       ids.map((id) => {
@@ -992,7 +1019,10 @@ class Phs16lcGroupCard extends HTMLElement {
       const on = ls && ls.state === "on";
       row.querySelector("svg").setAttribute("fill", on ? "var(--state-light-active-color, #ffc107)" : "var(--disabled-text-color, #9e9e9e)");
       row.querySelector(".phs-member-name").textContent =
-        (m.device && (m.device.name_by_user || m.device.name)) || m.light || "?";
+        (m.device && (m.device.name_by_user || m.device.name)) ||
+        (ls && ls.attributes && ls.attributes.friendly_name) ||
+        (m.address != null ? "SPOT " + m.address : m.light) ||
+        "?";
       row.querySelector(".phs-member-state").textContent =
         ls ? (ls.state === "unavailable" ? "—" : ls.state) : "—";
       row.addEventListener("click", (ev) => {

@@ -51,9 +51,9 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
   window.hass = {
     locale: { language: "fr" },
     devices: {
-      dev_spot3: { id: "dev_spot3", name: "SPOT 3", name_by_user: null, labels: ["serre_1_nord"] },
+      dev_spot3: { id: "dev_spot3", name: "SPOT 3", name_by_user: null, labels: [] },
       dev_spot7: { id: "dev_spot7", name: "SPOT 7", name_by_user: "Luminaire nord", labels: [] },
-      dev_spot9: { id: "dev_spot9", name: "SPOT 9", name_by_user: null, labels: ["serre_1_nord"] },
+      dev_spot9: { id: "dev_spot9", name: "SPOT 9", name_by_user: null, labels: [] },
       dev_g1: { id: "dev_g1", name: "serre_1_nord", name_by_user: null, labels: ["serre_1_nord"] },  // device du groupe lui-même
     },
     entities: {
@@ -89,7 +89,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128 } },
       "select.spot_9_recette": { entity_id: "select.spot_9_recette", state: "croissance.json", attributes: { options: ["croissance.json"] } },
       "binary_sensor.spot_9_online": { entity_id: "binary_sensor.spot_9_online", state: "off", attributes: {} },
-      "light.serre_1_nord": { entity_id: "light.serre_1_nord", state: "on", attributes: { friendly_name: "serre_1_nord", brightness: 180, members: [1, 2, 3], online: 2 } },
+      "light.serre_1_nord": { entity_id: "light.serre_1_nord", state: "on", attributes: { friendly_name: "serre_1_nord", brightness: 180, members: [3, 9] } },  // attribut `members` = source de vérité (backend >= v1.5.3)
       "select.serre_1_nord_recette": { entity_id: "select.serre_1_nord_recette", state: "floraison.json", attributes: { options: ["croissance.json", "floraison.json"] } },
     },
     callService(domain, service, data) {
@@ -123,17 +123,15 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       }
       if (domain === "phs16lc" && service === "set_group") {
         console.log("phs16lc.set_group", data);
-        const gid = data.group_id;
+        // le backend réécrit groups.json ; l'attribut `members` du light du groupe suit
         const spots = data.spots || [];
-        for (const d of Object.values(window.hass.devices)) {
-          const labels = new Set(d.labels || []);
-          if (d.id === "dev_g1") { labels.add(gid); }
-          else {
-            const isMember = spots.some((s) => window.hass.entities[s] && window.hass.entities[s].device_id === d.id);
-            if (isMember) labels.add(gid); else labels.delete(gid);
-          }
-          d.labels = [...labels];
-        }
+        const addresses = spots
+          .map((s) => (window.hass.entities[s].unique_id.match(/_spot_(\d+)_light$/) || [])[1])
+          .filter(Boolean)
+          .map(Number)
+          .sort((a, b) => a - b);
+        const g = window.hass.states["light.serre_1_nord"];
+        window.hass.states["light.serre_1_nord"] = { ...g, attributes: { ...g.attributes, members: addresses } };
         refresh();
       }
     },
