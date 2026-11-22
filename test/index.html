@@ -126,6 +126,13 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
         window.hass.states["select.spot_3_recette"] = { ...sel, attributes: { ...sel.attributes, options } };
         refresh();
       }
+      if (domain === "phs16lc" && service === "delete_recipe") {
+        console.log("phs16lc.delete_recipe", data);
+        const sel = window.hass.states["select.spot_3_recette"];
+        const options = (sel.attributes.options || []).filter((o) => o !== data.recipe);
+        window.hass.states["select.spot_3_recette"] = { ...sel, attributes: { ...sel.attributes, options } };
+        refresh();
+      }
       if (domain === "phs16lc" && service === "set_group") {
         console.log("phs16lc.set_group", data);
         // le backend réécrit groups.json ; l'attribut `members` du light du groupe suit

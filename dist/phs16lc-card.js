@@ -35,6 +35,9 @@ const I18N = {
     recipeName: "Nom de la recette…",
     needRecipeName: "Indiquez d'abord un nom de recette",
     recipeSaved: "Recette « {name} » enregistrée",
+    deleteRecipe: "Supprimer la recette",
+    confirmDelete: "Supprimer la recette « {name} » ?",
+    recipeDeleted: "Recette « {name} » supprimée",
     saveAll: "Sauvegarder NVM (tout le groupe)",
     members: "membres",
     onlineCount: "{on}/{total} en ligne",
@@ -73,6 +76,9 @@ const I18N = {
     recipeName: "Recipe name…",
     needRecipeName: "Enter a recipe name first",
     recipeSaved: "Recipe \"{name}\" saved",
+    deleteRecipe: "Delete recipe",
+    confirmDelete: "Delete recipe \"{name}\"?",
+    recipeDeleted: "Recipe \"{name}\" deleted",
     saveAll: "Save NVM (whole group)",
     members: "members",
     onlineCount: "{on}/{total} online",
@@ -102,7 +108,25 @@ const MDI_CHEVRON_DOWN =
 const MDI_CLOSE =
   "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
 
+const MDI_TRASH =
+  "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
+
 const CARD_VERSION = "1.0.0-p4";
+
+// Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
+function _deleteRecipe(el, hass, root) {
+  const sel = root.querySelector("select.phs-recipe, select[data-role='recipe']");
+  const recipe = sel && sel.value;
+  if (!recipe || recipe === "unknown" || recipe === "unavailable") return;
+  if (!window.confirm(_t(hass, "confirmDelete").replace("{name}", recipe))) return;
+  hass
+    .callService("phs16lc", "delete_recipe", { recipe })
+    .then(() => el._notify(_t(hass, "recipeDeleted").replace("{name}", recipe)))
+    .catch((err) => {
+      console.error("[phs16lc-card] delete_recipe a échoué", err);
+      el._notify(String((err && err.message) || err));
+    });
+}
 
 // Choisit une entité dans une liste (même device + domaine) : par translation_key,
 // sinon par suffixe de unique_id (`..._<key>`), sinon par indice dans l'entity_id.
@@ -508,7 +532,7 @@ class Phs16lcSpotCard extends HTMLElement {
       .join("<span style='margin:0 6px; color:var(--divider-color,#e0e0e0);'>|</span>");
     html += `<div style="display:flex; gap:6px; margin-bottom:10px;">${tempRow}</div>`;
 
-    // Selects recette / groupe.
+    // Selects recette / groupe (le sélecteur recette a un bouton de suppression).
     const selRow = (role, labelKey) => {
       const s = this._state(role);
       if (!s) return "";
@@ -516,11 +540,19 @@ class Phs16lcSpotCard extends HTMLElement {
       const opts = options
         .map((o) => `<option value="${o}"${o === s.state ? " selected" : ""}>${o}</option>`)
         .join("");
+      const delBtn =
+        role === "recipe"
+          ? `<button class="phs-del-recipe" title="${_t(hass, "deleteRecipe")}"
+              style="border:none; background:none; cursor:pointer; padding:4px; color:var(--secondary-text-color);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="${MDI_TRASH}"/></svg>
+            </button>`
+          : "";
       return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, labelKey)}</span>
         <select data-role="${role}" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">
           ${opts}
         </select>
+        ${delBtn}
       </div>`;
     };
     html += selRow("recipe", "recipe") + selRow("group", "group");
@@ -580,6 +612,13 @@ class Phs16lcSpotCard extends HTMLElement {
         this._selectOption(sel.dataset.role, ev);
       });
     });
+    const delRecipeBtn = root.querySelector(".phs-del-recipe");
+    if (delRecipeBtn) {
+      delRecipeBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        _deleteRecipe(this, hass, root);
+      });
+    }
 
     root.querySelectorAll(".phs-channel").forEach((slider) => {
       const idx = parseInt(slider.dataset.idx, 10);
@@ -1045,6 +1084,10 @@ class Phs16lcGroupCard extends HTMLElement {
       html += `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "recipe")}</span>
         <select class="phs-recipe" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">${opts}</select>
+        <button class="phs-del-recipe" title="${_t(hass, "deleteRecipe")}"
+          style="border:none; background:none; cursor:pointer; padding:4px; color:var(--secondary-text-color);">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="${MDI_TRASH}"/></svg>
+        </button>
       </div>`;
     }
 
@@ -1120,6 +1163,13 @@ class Phs16lcGroupCard extends HTMLElement {
       sel.addEventListener("change", (ev) => {
         ev.stopPropagation();
         this._selectRecipe(ev);
+      });
+    }
+    const delRecipeBtn = root.querySelector(".phs-del-recipe");
+    if (delRecipeBtn) {
+      delRecipeBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        _deleteRecipe(this, hass, root);
       });
     }
 
