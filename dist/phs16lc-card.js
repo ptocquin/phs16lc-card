@@ -92,6 +92,8 @@ const MDI_CHEVRON_DOWN =
 const MDI_CLOSE =
   "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
 
+const CARD_VERSION = "1.0.0-p4";
+
 // Choisit une entité dans une liste (même device + domaine) : par translation_key,
 // sinon par suffixe de unique_id (`..._<key>`), sinon par indice dans l'entity_id.
 function _pick(list, translationKey, idHint) {
@@ -668,6 +670,7 @@ class Phs16lcGroupCard extends HTMLElement {
           online: o ? o.entity_id : null,
         });
       }
+      console.debug("[phs16lc-card] membres via attribut `members` :", this._members.map((m) => m.light));
       return;
     }
 
@@ -723,10 +726,29 @@ class Phs16lcGroupCard extends HTMLElement {
       .map((e) => e.entity_id);
   }
 
+  _notify(message) {
+    this.dispatchEvent(
+      new CustomEvent("hass-notification", {
+        detail: { message },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
   _setMembers(spots) {
     const gid = this._config.group_id;
-    if (!gid) return;
-    this._hass.callService("phs16lc", "set_group", { group_id: gid, spots });
+    if (!gid) {
+      this._notify(_t(this._hass, "needGroupId"));
+      return;
+    }
+    console.debug("[phs16lc-card] set_group", gid, spots);
+    this._hass
+      .callService("phs16lc", "set_group", { group_id: gid, spots })
+      .catch((err) => {
+        console.error("[phs16lc-card] set_group a échoué", err);
+        this._notify(String((err && err.message) || err));
+      });
   }
 
   _removeMember(m) {
@@ -1061,6 +1083,9 @@ class Phs16lcGroupCard extends HTMLElement {
 }
 
 customElements.define("phs16lc-group-card", Phs16lcGroupCard);
+
+window.__phs16lcCardVersion = CARD_VERSION;
+console.info("[phs16lc-card] v" + CARD_VERSION + " chargé");
 
 window.customCards = window.customCards || [];
 window.customCards.push({
