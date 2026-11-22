@@ -31,6 +31,10 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     save: "Sauvegarder NVM",
+    saveRecipe: "Enregistrer comme recette",
+    recipeName: "Nom de la recette…",
+    needRecipeName: "Indiquez d'abord un nom de recette",
+    recipeSaved: "Recette « {name} » enregistrée",
     saveAll: "Sauvegarder NVM (tout le groupe)",
     members: "membres",
     onlineCount: "{on}/{total} en ligne",
@@ -65,6 +69,10 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     save: "Save NVM",
+    saveRecipe: "Save as recipe",
+    recipeName: "Recipe name…",
+    needRecipeName: "Enter a recipe name first",
+    recipeSaved: "Recipe \"{name}\" saved",
     saveAll: "Save NVM (whole group)",
     members: "members",
     onlineCount: "{on}/{total} online",
@@ -287,6 +295,46 @@ class Phs16lcSpotCard extends HTMLElement {
     if (address) this._hass.callService("phs16lc", "save", { address });
   }
 
+  _notify(message) {
+    this.dispatchEvent(
+      new CustomEvent("hass-notification", {
+        detail: { message },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  // Enregistre les positions actuelles des sliders comme nouvelle recette (JSON v1).
+  _saveRecipe(root) {
+    const input = root.querySelector(".phs-recipe-name");
+    const name = ((input && input.value) || "").trim();
+    if (!name) {
+      this._notify(_t(this._hass, "needRecipeName"));
+      return;
+    }
+    const address = this._address();
+    if (!address) {
+      this._notify(_t(this._hass, "entityNotFound"));
+      return;
+    }
+    const data = { name, address, description: "Enregistrée depuis la carte PHS16-LC" };
+    // positions des sliders telles qu'affichées (peuvent ne pas encore être reflétées
+    // par le polling) ; sans sliders, le backend lira les courants du dernier poll
+    const sliders = [...root.querySelectorAll(".phs-channel")];
+    if (sliders.length) data.currents = sliders.map((s) => s.value).join(",");
+    this._hass
+      .callService("phs16lc", "save_recipe", data)
+      .then(() => {
+        this._notify(_t(this._hass, "recipeSaved").replace("{name}", name));
+        if (input) input.value = "";
+      })
+      .catch((err) => {
+        console.error("[phs16lc-card] save_recipe a échoué", err);
+        this._notify(String((err && err.message) || err));
+      });
+  }
+
   _moreInfo() {
     if (!this._ents.light) return;
     this.dispatchEvent(
@@ -492,7 +540,13 @@ class Phs16lcSpotCard extends HTMLElement {
         .join("");
       html += `
         <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${_t(hass, "channels")} (${_t(hass, "ma")})</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">${items}</div>`;
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">${items}</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="phs-recipe-name" type="text" placeholder="${_t(hass, "recipeName")}"
+            style="flex:1; min-width:0; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:6px 8px; font-size:13px;">
+          <button class="phs-save-recipe"
+            style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap;">${_t(hass, "saveRecipe")}</button>
+        </div>`;
     }
 
     // Bouton save NVM.
@@ -539,6 +593,16 @@ class Phs16lcSpotCard extends HTMLElement {
         this._setChannel(idx, ev);
       });
     });
+
+    const recipeName = root.querySelector(".phs-recipe-name");
+    if (recipeName) recipeName.addEventListener("click", (ev) => ev.stopPropagation());
+    const saveRecipeBtn = root.querySelector(".phs-save-recipe");
+    if (saveRecipeBtn) {
+      saveRecipeBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._saveRecipe(root);
+      });
+    }
 
     const saveBtn = root.querySelector(".phs-save");
     saveBtn.addEventListener("click", (ev) => {
