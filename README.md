@@ -1,0 +1,49 @@
+# PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
+
+Carte compacte pour les luminaires **PHS16-LC** (intégration Home Assistant
+`phs16lc`) : état, recette courante, températures, luminosité, courants des
+16 canaux et actions rapides (on/off, recette, « Sauvegarder NVM »), pour un
+SPOT individuel ou un groupe de luminaires.
+
+<!-- ha-marketplace:exclude-start -->
+## Installation via le Marketplace (recommandé, HA 2026.11+)
+
+1. Créer le dépôt GitHub `phs16lc-card` à partir de ce sous-répertoire
+   (`git subtree push --prefix=ha-card card-dist master`, remote `card-dist`).
+2. Dans Home Assistant : **Réglages → Marketplace → Dépôts personnalisés →
+   « Ajouter depuis un lien »**, coller l'URL du dépôt GitHub.
+3. Ouvrir le dépôt dans le Marketplace et l'installer : le fichier
+   `dist/phs16lc-card.js` est copié dans `www/community/phs16lc-card/` et la
+   ressource de dashboard est **ajoutée automatiquement** (un rechargement du
+   navigateur est proposé).
+<!-- ha-marketplace:exclude-end -->
+
+## Installation manuelle (sans Marketplace)
+
+1. Copier `dist/phs16lc-card.js` dans `/config/www/phs16lc-card.js`.
+2. **Réglages → Tableaux de bord → Ressources** (ou « … » en haut à droite de
+   n'importe quel dashboard) : ajouter une ressource de type **Module** avec
+   l'URL `/local/phs16lc-card.js`.
+
+## Utilisation
+
+```yaml
+# Carte d'un SPOT (résolution auto des entités via le device registry)
+- type: custom:phs16lc-spot-card
+  device: SPOT 3
+
+# Carte d'un groupe de luminaires (device « Groupe <name> » de l'intégration)
+- type: custom:phs16lc-group-card
+  device: Groupe serre 1
+  group_id: serre_1_nord   # pour les appels service address="group:<id>"
+```
+
+La carte suit la langue de Home Assistant (français / anglais).
+
+## Développement
+
+Voir `PLAN.md` (phases P0–P5). JS vanilla sans build, testable hors HA via
+`test/index.html` (objet `hass` mocké).
+
+L'intégration `phs16lc` (obligatoire pour que la carte ait des données) :
+voir le dépôt `phs16lc-ha` / le Marketplace.

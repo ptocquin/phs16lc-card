@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Test harness — phs16lc-card (P0)</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; background: #fafafa; color: #212121; }
+  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: 900px; }
+  .label { font-size: 12px; color: #757575; margin: 16px 0 4px; }
+</style>
+</head>
+<body>
+<h3>Harnais de test — phs16lc-card (P0)</h3>
+<p>Objet <code>hass</code> mocké : ouvrir cette page dans un navigateur, pas besoin d'instance HA.</p>
+
+<div class="label">Config device: "SPOT 3" (résolution via device registry)</div>
+<div id="cards"></div>
+<div class="label">Config entity: "light.spot_7" (direct)</div>
+<div id="cards2"></div>
+<div class="label">Config invalide (device inconnu) → erreur rendue dans la carte</div>
+<div id="cards3"></div>
+
+<script>
+  // Stub de <ha-card> (dans HA, le frontend le fournit ; ici on l'imite).
+  if (!customElements.get("ha-card")) {
+    customElements.define("ha-card", class extends HTMLElement {
+      connectedCallback() {
+        this.style.display = "block";
+        this.style.background = "var(--ha-card-background, var(--card-background-color, #fff))";
+        this.style.borderRadius = "var(--ha-card-border-radius, 12px)";
+        this.style.boxShadow = "var(--ha-card-box-shadow, 0 1px 3px rgba(0,0,0,.24))";
+      }
+    });
+  }
+
+  // hass mocké : 2 devices SPOT avec leurs entités phs16lc.
+  window.hass = {
+    locale: { language: "fr" },
+    devices: {
+      dev_spot3: { id: "dev_spot3", name: "SPOT 3", name_by_user: null },
+      dev_spot7: { id: "dev_spot7", name: "SPOT 7", name_by_user: "Luminaire nord" },
+    },
+    entities: {
+      "light.spot_3": { entity_id: "light.spot_3", device_id: "dev_spot3", platform: "phs16lc" },
+      "sensor.spot_3_currents": { entity_id: "sensor.spot_3_currents", device_id: "dev_spot3", platform: "phs16lc", translation_key: "currents" },
+      "light.spot_7": { entity_id: "light.spot_7", device_id: "dev_spot7", platform: "phs16lc" },
+    },
+    states: {
+      "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200 } },
+      "light.spot_7": { entity_id: "light.spot_7", state: "off", attributes: { friendly_name: "Luminaire nord" } },
+    },
+    callService(domain, service, data) { console.log("callService", domain, service, data); },
+  };
+</script>
+<script src="../dist/phs16lc-card.js"></script>
+<script>
+  function makeCard(config, mountId) {
+    const card = document.createElement("phs16lc-spot-card");
+    card.setConfig(config);
+    card.hass = window.hass;
+    document.getElementById(mountId).appendChild(card);
+    return card;
+  }
+  makeCard({ device: "SPOT 3" }, "cards");
+  makeCard({ entity: "light.spot_7" }, "cards2");
+  makeCard({ device: "SPOT 99" }, "cards3");
+
+  // Re-render après changement d'état (simule un polling HA).
+  setTimeout(() => {
+    window.hass.states["light.spot_3"] = { entity_id: "light.spot_3", state: "off", attributes: { friendly_name: "SPOT 3" } };
+    document.querySelectorAll("phs16lc-spot-card").forEach((c) => { c.hass = window.hass; });
+  }, 3000);
+</script>
+</body>
+</html>
