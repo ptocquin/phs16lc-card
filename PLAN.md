@@ -4,6 +4,10 @@
 > P0 fait (squelette, config `device:`/`entity:`, harness `test/index.html`).
 > P1 fait : carte SPOT compacte — on/off + en ligne, recette courante, moyenne temp
 > LED (max en tooltip), bouton power (`light.turn_on/off`), tap → more-info.
+> P2 fait : panneau dépliable (chevron) — slider luminosité 0-255 (~mA), 16 sliders
+> canal (`phs16lc.set_channel`, adresse extraite de l'unique_id), températures
+> détaillées, selects recette/groupe, bouton « Sauvegarder NVM ». Re-render par
+> signature d'état (pas de perte de focus pendant un drag).
 
 Carte frontend pour les luminaires PHS16-LC : vue compacte par SPOT et par groupe
 de luminaires, avec accès rapide aux actions principales (on/off, recette,

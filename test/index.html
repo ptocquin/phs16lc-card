@@ -34,10 +34,12 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
     });
   }
 
-  const E = (entity_id, device_id, translation_key) => ({
-    entity_id, device_id, platform: "phs16lc", translation_key,
-    unique_id: "entry1_" + entity_id.replace(/\./g, "_"),
-  });
+  // unique_id au format réel de l'intégration : `<entry_id>_spot_<n>_<entity_key>`
+  const E = (entity_id, device_id, translation_key) => {
+    const n = (entity_id.match(/spot_(\d+)/) || [])[1];
+    const key = translation_key || entity_id.split(".").pop();
+    return { entity_id, device_id, platform: "phs16lc", translation_key, unique_id: `cfg_spot_${n}_${key}` };
+  };
 
   // hass mocké : 2 devices SPOT avec toutes leurs entités phs16lc.
   window.hass = {
@@ -73,24 +75,44 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
     },
     callService(domain, service, data) {
       console.log("callService", domain, service, data);
-      if (domain === "light" && (service === "turn_on" || service === "turn_off")) {
-        const id = data.entity_id;
-        window.hass.states[id] = { ...window.hass.states[id], state: service === "turn_on" ? "on" : "off" };
+      const refresh = () =>
         document.querySelectorAll("phs16lc-spot-card").forEach((c) => { c.hass = window.hass; });
+      if (domain === "light" && (service === "turn_on" || service === "turn_off")) {
+        window.hass.states[data.entity_id] = {
+          ...window.hass.states[data.entity_id],
+          state: service === "turn_on" ? "on" : "off",
+          attributes: { ...window.hass.states[data.entity_id].attributes, brightness: service === "turn_on" ? (data.brightness ?? 255) : undefined },
+        };
+        refresh();
+      }
+      if (domain === "phs16lc" && service === "set_channel") {
+        const s = window.hass.states["sensor.spot_3_courants"];
+        const channels = [...s.attributes.channels];
+        channels[data.channel - 1] = data.ma;
+        window.hass.states["sensor.spot_3_courants"] = { ...s, attributes: { ...s.attributes, channels } };
+        refresh();
+      }
+      if (domain === "select" && service === "select_option") {
+        window.hass.states[data.entity_id] = { ...window.hass.states[data.entity_id], state: data.option };
+        refresh();
+      }
+      if (domain === "button" && service === "press") {
+        console.log("NVM sauvegardée (mock)");
       }
     },
   };
 </script>
 <script src="../dist/phs16lc-card.js"></script>
 <script>
-  function makeCard(config, mountId) {
+  function makeCard(config, mountId, expanded) {
     const card = document.createElement("phs16lc-spot-card");
     card.setConfig(config);
     card.hass = window.hass;
+    if (expanded) { card._expanded = true; card._render(true); }
     document.getElementById(mountId).appendChild(card);
     return card;
   }
-  makeCard({ device: "SPOT 3" }, "cards");
+  makeCard({ device: "SPOT 3" }, "cards", true);   // panneau déplié
   makeCard({ entity: "light.spot_7" }, "cards2");
   makeCard({ device: "SPOT 99" }, "cards3");
 </script>

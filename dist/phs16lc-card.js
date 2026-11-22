@@ -1,11 +1,12 @@
-// Carte Lovelace custom PHS16-LC — phase P1 : carte SPOT compacte.
+// Carte Lovelace custom PHS16-LC — phase P2 : carte SPOT compacte + panneau dépliable.
 // Dev : JS vanilla sans étape de build. Contrat custom card : setConfig() + propriété `hass`.
 // Doc : https://contributors.home-assistant.io/frontend/custom-ui/
 //
 // Config :
 //   type: custom:phs16lc-spot-card
-//   device: SPOT 3        # résolution auto des entités via le device registry
-//   entity: light.spot_3  # (optionnel) surcharge du light principal
+//   device: SPOT 3            # résolution auto des entités via le device registry
+//   entity: light.spot_3      # (optionnel) surcharge du light principal
+//   show_channels: false      # (optionnel, défaut true) masque les 16 sliders canal
 
 const I18N = {
   fr: {
@@ -16,11 +17,20 @@ const I18N = {
     online: "En ligne",
     offline: "Hors ligne",
     recipe: "Recette",
+    group: "Groupe",
     noRecipe: "Aucune recette",
     ledTemp: "LED",
     max: "max",
     powerOn: "Allumer",
     powerOff: "Éteindre",
+    expand: "Déplier",
+    collapse: "Replier",
+    brightness: "Luminosité",
+    channels: "Canaux",
+    channel: "Canal",
+    ma: "mA",
+    tempCpu: "CPU",
+    save: "Sauvegarder NVM",
     configError:
       'Config invalide : fournir `device:` (ex. "SPOT 3") ou `entity:` (ex. "light.spot_3").',
     deviceNotFound: "Device introuvable",
@@ -34,11 +44,20 @@ const I18N = {
     online: "Online",
     offline: "Offline",
     recipe: "Recipe",
+    group: "Group",
     noRecipe: "No recipe",
     ledTemp: "LED",
     max: "max",
     powerOn: "Turn on",
     powerOff: "Turn off",
+    expand: "Expand",
+    collapse: "Collapse",
+    brightness: "Brightness",
+    channels: "Channels",
+    channel: "Channel",
+    ma: "mA",
+    tempCpu: "CPU",
+    save: "Save NVM",
     configError:
       'Invalid config: provide `device:` (e.g. "SPOT 3") or `entity:` (e.g. "light.spot_3").',
     deviceNotFound: "Device not found",
@@ -56,6 +75,8 @@ const MDI_LIGHTBULB =
   "M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2zM9 21h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z";
 const MDI_POWER =
   "M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.99 6.99 0 0 1 19 12a7 7 0 1 1-14 0c0-2.05.9-3.9 2.59-5.41L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 1 0 18 0 8.93 8.93 0 0 0-3.17-6.83z";
+const MDI_CHEVRON_DOWN =
+  "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z";
 
 // Choisit une entité dans une liste (même device + domaine) : par translation_key,
 // sinon par suffixe de unique_id (`..._<key>`), sinon par indice dans l'entity_id.
@@ -75,6 +96,9 @@ class Phs16lcSpotCard extends HTMLElement {
     this._device = null;
     this._ents = {}; // entity_id par rôle : light, online, tempCpu, tempLed1, tempLed2, currents, recipe, group, saveNvm
     this._error = null;
+    this._expanded = false;
+    this._built = false;
+    this._sig = "";
   }
 
   static getStubConfig() {
@@ -82,7 +106,7 @@ class Phs16lcSpotCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 2;
+    return this._expanded ? 6 : 2;
   }
 
   setConfig(config) {
@@ -141,6 +165,16 @@ class Phs16lcSpotCard extends HTMLElement {
     }
   }
 
+  // Adresse bus du SPOT : extraite de l'unique_id (`..._spot_<n>_...`), sinon du nom du device.
+  _address() {
+    const reg = (this._hass.entities || {})[this._ents.light];
+    const m = reg && (reg.unique_id || "").match(/_spot_(\d+)_/);
+    if (m) return m[1];
+    const name = this._device && (this._device.name_by_user || this._device.name);
+    const m2 = name && String(name).match(/(\d+)/);
+    return m2 ? m2[1] : null;
+  }
+
   _state(role) {
     const id = this._ents[role];
     return id && this._hass.states ? this._hass.states[id] : null;
@@ -155,6 +189,41 @@ class Phs16lcSpotCard extends HTMLElement {
     });
   }
 
+  _setBrightness(ev) {
+    const v = parseInt(ev.target.value, 10);
+    if (v === 0) {
+      this._hass.callService("light", "turn_off", { entity_id: this._ents.light });
+    } else {
+      this._hass.callService("light", "turn_on", { entity_id: this._ents.light, brightness: v });
+    }
+  }
+
+  _setChannel(idx, ev) {
+    const address = this._address();
+    if (!address) return;
+    this._hass.callService("phs16lc", "set_channel", {
+      address,
+      channel: idx + 1,
+      ma: parseInt(ev.target.value, 10),
+    });
+  }
+
+  _selectOption(role, ev) {
+    this._hass.callService("select", "select_option", {
+      entity_id: this._ents[role],
+      option: ev.target.value,
+    });
+  }
+
+  _saveNvm() {
+    if (this._ents.saveNvm) {
+      this._hass.callService("button", "press", { entity_id: this._ents.saveNvm });
+      return;
+    }
+    const address = this._address();
+    if (address) this._hass.callService("phs16lc", "save", { address });
+  }
+
   _moreInfo() {
     if (!this._ents.light) return;
     this.dispatchEvent(
@@ -166,9 +235,28 @@ class Phs16lcSpotCard extends HTMLElement {
     );
   }
 
-  _render() {
+  // Signature des états utilisés : évite de re-rendre (et de perdre le focus d'un
+  // slider en cours de drag) quand rien n'a changé côté HA.
+  _signature() {
+    const ids = Object.values(this._ents).filter(Boolean);
+    return JSON.stringify(
+      ids.map((id) => {
+        const s = this._hass.states[id];
+        if (!s) return null;
+        const a = s.attributes || {};
+        return [s.state, a.brightness, a.channels, a.options];
+      })
+    );
+  }
+
+  _render(force) {
     if (!this._hass || !this._config) return;
+    const sig = this._signature();
+    if (!force && this._built && sig === this._sig) return;
+    this._sig = sig;
+    this._built = true;
     const hass = this._hass;
+    const lang = (hass.locale && hass.locale.language) || "en";
     const light = this._state("light");
     const name =
       (light && light.attributes && light.attributes.friendly_name) ||
@@ -178,6 +266,7 @@ class Phs16lcSpotCard extends HTMLElement {
 
     const card = document.createElement("ha-card");
     card.style.padding = "12px 16px";
+    card.style.cursor = "pointer";
     card.addEventListener("click", () => this._moreInfo());
 
     if (this._error || !light) {
@@ -204,25 +293,24 @@ class Phs16lcSpotCard extends HTMLElement {
 
     // Puce en ligne / hors ligne.
     const online = this._state("online");
-    const isOnline = !online || online.state === "on"; // pas de binary_sensor => on ignore
+    const isOnline = !online || online.state === "on";
     const onlineChip = online
-      ? `<span class="phs-chip" style="color:${isOnline ? "var(--success-color, #4caf50)" : "var(--error-color, #db4437)"}">● ${isOnline ? _t(hass, "online") : _t(hass, "offline")}</span>`
+      ? `<span style="color:${isOnline ? "var(--success-color, #4caf50)" : "var(--error-color, #db4437)"}">● ${isOnline ? _t(hass, "online") : _t(hass, "offline")}</span>`
       : "";
 
     // Recette courante (état du select).
     const recipe = this._state("recipe");
-    const recipeChip = `<span class="phs-chip">${_t(hass, "recipe")} : ${recipe && recipe.state && recipe.state !== "unknown" ? recipe.state : _t(hass, "noRecipe")}</span>`;
+    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipe && recipe.state && recipe.state !== "unknown" ? recipe.state : _t(hass, "noRecipe")}</span>`;
 
     // Moyenne des températures LED 1/2 (max en tooltip).
     const t1 = parseFloat(this._state("tempLed1") && this._state("tempLed1").state);
     const t2 = parseFloat(this._state("tempLed2") && this._state("tempLed2").state);
     const temps = [t1, t2].filter((v) => !Number.isNaN(v));
-    const lang = (hass.locale && hass.locale.language) || "en";
     let tempChip = "";
     if (temps.length) {
       const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
       const max = Math.max(...temps);
-      tempChip = `<span class="phs-chip" title="${_t(hass, "max")} ${max.toLocaleString(lang)} °C">${avg.toLocaleString(lang, { maximumFractionDigits: 1 })} °C ${_t(hass, "ledTemp")}</span>`;
+      tempChip = `<span title="${_t(hass, "max")} ${max.toLocaleString(lang)} °C">${avg.toLocaleString(lang, { maximumFractionDigits: 1 })} °C ${_t(hass, "ledTemp")}</span>`;
     }
 
     card.innerHTML = `
@@ -236,22 +324,157 @@ class Phs16lcSpotCard extends HTMLElement {
             ${onlineChip}${recipeChip}${tempChip}
           </div>
         </div>
-        <div style="text-align:right;">
-          <div class="phs-state" style="font-size:13px; color:var(--secondary-text-color);">${stateLabel}</div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <div class="phs-state" style="font-size:13px; color:var(--secondary-text-color); margin-right:4px;">${stateLabel}</div>
           <button class="phs-power" title="${on ? _t(hass, "powerOff") : _t(hass, "powerOn")}"
             style="border:none; background:none; cursor:pointer; padding:4px; color:${iconColor};">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
               <path d="${MDI_POWER}"/>
             </svg>
           </button>
+          <button class="phs-expand" title="${this._expanded ? _t(hass, "collapse") : _t(hass, "expand")}"
+            style="border:none; background:none; cursor:pointer; padding:4px; color:var(--secondary-text-color); transform:${this._expanded ? "rotate(180deg)" : "none"};">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+              <path d="${MDI_CHEVRON_DOWN}"/>
+            </svg>
+          </button>
         </div>
-      </div>`;
+      </div>
+      <div class="phs-details" style="display:${this._expanded ? "block" : "none"}; margin-top:12px; border-top:1px solid var(--divider-color, #e0e0e0); padding-top:12px;"></div>`;
     card.querySelector(".phs-name").textContent = name;
     card.querySelector(".phs-power").addEventListener("click", (ev) => {
       ev.stopPropagation();
       this._toggle();
     });
+    card.querySelector(".phs-expand").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._expanded = !this._expanded;
+      this._render(true);
+    });
+
+    if (this._expanded) this._renderDetails(card.querySelector(".phs-details"), hass, lang);
     this.replaceChildren(card);
+  }
+
+  _renderDetails(root, hass, lang) {
+    const light = this._state("light");
+    const brightness =
+      light.attributes && light.attributes.brightness != null
+        ? light.attributes.brightness
+        : light.state === "on"
+          ? 255
+          : 0;
+    const showChannels = this._config.show_channels !== false;
+    const currents = this._state("currents");
+    const channels = currents && currents.attributes && currents.attributes.channels;
+
+    // Mapping luminosité HA (1-255) -> mA (linéaire 74-2150, cf. intégration).
+    const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
+
+    let html = `
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "brightness")}</span>
+        <input class="phs-brightness" type="range" min="0" max="255" step="1"
+          value="${brightness}"
+          style="flex:1; accent-color:var(--primary-color);">
+        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
+      </div>`;
+
+    // Températures détaillées.
+    const tempRow = ["tempCpu", "tempLed1", "tempLed2"]
+      .map((role) => {
+        const s = this._state(role);
+        const label = role === "tempCpu" ? _t(hass, "tempCpu") : role === "tempLed1" ? "LED 1" : "LED 2";
+        return `<span style="font-size:12px; color:var(--secondary-text-color);">${label} : ${s && s.state !== "unavailable" ? s.state + " °C" : "—"}</span>`;
+      })
+      .join("<span style='margin:0 6px; color:var(--divider-color,#e0e0e0);'>|</span>");
+    html += `<div style="display:flex; gap:6px; margin-bottom:10px;">${tempRow}</div>`;
+
+    // Selects recette / groupe.
+    const selRow = (role, labelKey) => {
+      const s = this._state(role);
+      if (!s) return "";
+      const options = (s.attributes && s.attributes.options) || [];
+      const opts = options
+        .map((o) => `<option value="${o}"${o === s.state ? " selected" : ""}>${o}</option>`)
+        .join("");
+      return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, labelKey)}</span>
+        <select data-role="${role}" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">
+          ${opts}
+        </select>
+      </div>`;
+    };
+    html += selRow("recipe", "recipe") + selRow("group", "group");
+
+    // 16 sliders de canaux.
+    if (showChannels && Array.isArray(channels) && channels.length) {
+      const items = channels
+        .map(
+          (ma, i) => `
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; color:var(--secondary-text-color); width:24px;">C${i + 1}</span>
+          <input class="phs-channel" data-idx="${i}" type="range" min="0" max="2150" step="10"
+            value="${ma}" style="flex:1; accent-color:var(--primary-color);">
+          <span class="phs-channel-val" style="font-size:11px; color:var(--secondary-text-color); width:58px; text-align:right;">${ma} ${_t(hass, "ma")}</span>
+        </div>`
+        )
+        .join("");
+      html += `
+        <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${_t(hass, "channels")} (${_t(hass, "ma")})</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">${items}</div>`;
+    }
+
+    // Bouton save NVM.
+    html += `
+      <div style="margin-top:12px; text-align:right;">
+        <button class="phs-save" style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px;">
+          ${_t(hass, "save")}
+        </button>
+      </div>`;
+
+    root.innerHTML = html;
+
+    const bSlider = root.querySelector(".phs-brightness");
+    const bVal = root.querySelector(".phs-brightness-val");
+    const paintB = () => {
+      const v = parseInt(bSlider.value, 10);
+      bVal.textContent = v === 0 ? _t(hass, "off") : `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+    };
+    paintB();
+    bSlider.addEventListener("input", paintB);
+    bSlider.addEventListener("change", (ev) => {
+      ev.stopPropagation();
+      this._setBrightness(ev);
+    });
+    bSlider.addEventListener("click", (ev) => ev.stopPropagation());
+
+    root.querySelectorAll("select").forEach((sel) => {
+      sel.addEventListener("click", (ev) => ev.stopPropagation());
+      sel.addEventListener("change", (ev) => {
+        ev.stopPropagation();
+        this._selectOption(sel.dataset.role, ev);
+      });
+    });
+
+    root.querySelectorAll(".phs-channel").forEach((slider) => {
+      const idx = parseInt(slider.dataset.idx, 10);
+      const val = slider.parentElement.querySelector(".phs-channel-val");
+      slider.addEventListener("input", () => {
+        val.textContent = `${slider.value} ${_t(hass, "ma")}`;
+      });
+      slider.addEventListener("click", (ev) => ev.stopPropagation());
+      slider.addEventListener("change", (ev) => {
+        ev.stopPropagation();
+        this._setChannel(idx, ev);
+      });
+    });
+
+    const saveBtn = root.querySelector(".phs-save");
+    saveBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._saveNvm();
+    });
   }
 }
 
