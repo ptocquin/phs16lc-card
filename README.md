@@ -53,7 +53,9 @@ La carte suit la langue de Home Assistant (français / anglais).
    type: custom:phs16lc-spot-card
    device: SPOT 1
    ```
-4. **Cmd+Shift+R** après chaque mise à jour du fichier JS (cache navigateur).
+4. **Cmd+Shift+R** après chaque mise à jour du fichier JS (cache navigateur). Si le
+   cache résiste, ajouter un paramètre de version à l'URL de la ressource
+   (`/local/phs16lc-card.js?v=2026-11-22-p3`) : l'URL change force le rechargement.
 5. Si le lien série est mort (erreurs `termios.error: (6, 'Device not configured')`
    dans le log : pty d'un ancien `fake_spot` fermé), relancer le simulateur :
    ```
