@@ -35,6 +35,8 @@ const I18N = {
     members: "membres",
     onlineCount: "{on}/{total} en ligne",
     needGroupId: "Config : ajouter `group_id:` pour la sauvegarde NVM du groupe",
+    addMember: "Ajouter un luminaire",
+    removeMember: "Retirer du groupe",
     configError:
       'Config invalide : fournir `device:` (ex. "SPOT 3") ou `entity:` (ex. "light.spot_3").',
     deviceNotFound: "Device introuvable",
@@ -66,6 +68,8 @@ const I18N = {
     members: "members",
     onlineCount: "{on}/{total} online",
     needGroupId: "Config: add `group_id:` to save the group NVM",
+    addMember: "Add a luminaire",
+    removeMember: "Remove from group",
     configError:
       'Invalid config: provide `device:` (e.g. "SPOT 3") or `entity:` (e.g. "light.spot_3").',
     deviceNotFound: "Device not found",
@@ -85,6 +89,8 @@ const MDI_POWER =
   "M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.99 6.99 0 0 1 19 12a7 7 0 1 1-14 0c0-2.05.9-3.9 2.59-5.41L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 1 0 18 0 8.93 8.93 0 0 0-3.17-6.83z";
 const MDI_CHEVRON_DOWN =
   "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z";
+const MDI_CLOSE =
+  "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
 
 // Choisit une entité dans une liste (même device + domaine) : par translation_key,
 // sinon par suffixe de unique_id (`..._<key>`), sinon par indice dans l'entity_id.
@@ -671,6 +677,40 @@ class Phs16lcGroupCard extends HTMLElement {
     return !s || s.state === "on"; // pas de capteur online -> considéré en ligne
   }
 
+  // Entity_id des lights des membres actuels (pour set_group spots=[...]).
+  _memberSpots() {
+    return (this._members || []).map((m) => m.light).filter(Boolean);
+  }
+
+  // Luminaires SPOT candidats à l'ajout : lights phs16lc dont l'unique_id est
+  // `..._spot_<n>_light` (les lights de groupes sont `..._group_<id>_light`).
+  _candidateSpots() {
+    const current = new Set(this._memberSpots());
+    return Object.values(this._hass.entities || {})
+      .filter(
+        (e) =>
+          e.entity_id.startsWith("light.") &&
+          /_spot_\d+_light$/.test(e.unique_id || "") &&
+          !current.has(e.entity_id)
+      )
+      .map((e) => e.entity_id);
+  }
+
+  _setMembers(spots) {
+    const gid = this._config.group_id;
+    if (!gid) return;
+    this._hass.callService("phs16lc", "set_group", { group_id: gid, spots });
+  }
+
+  _removeMember(m) {
+    this._setMembers(this._memberSpots().filter((id) => id !== m.light));
+  }
+
+  _addMember(entityId) {
+    if (!entityId) return;
+    this._setMembers([...this._memberSpots(), entityId]);
+  }
+
   _state(role) {
     const id = this._ents[role];
     return id && this._hass.states ? this._hass.states[id] : null;
@@ -723,7 +763,8 @@ class Phs16lcGroupCard extends HTMLElement {
     const memberStates = (this._members || []).map((m) => {
       const l = m.light && this._hass.states[m.light];
       const o = m.online && this._hass.states[m.online];
-      return [l && l.state, o && o.state];
+      // inclure id + labels : un changement de membres doit re-rendre même si les états sont identiques
+      return [m.light, (m.device.labels || []).join(","), l && l.state, o && o.state];
     });
     return JSON.stringify([
       ids.map((id) => {
@@ -865,21 +906,42 @@ class Phs16lcGroupCard extends HTMLElement {
       </div>`;
     }
 
-    // Liste des luminaires membres (devices portant le label <group_id>).
-    if ((this._members || []).length) {
+    // Liste des luminaires membres (devices portant le label <group_id>),
+    // avec bouton de retrait par ligne et sélecteur d'ajout en dessous.
+    const candidates = this._candidateSpots();
+    if ((this._members || []).length || candidates.length) {
       const rows = this._members
         .map(
-          (m) => `
-        <div class="phs-member" style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;">
+          (m, i) => `
+        <div class="phs-member" data-idx="${i}" style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--disabled-text-color, #9e9e9e)" aria-hidden="true">
             <path d="${MDI_LIGHTBULB}"/>
           </svg>
           <span class="phs-member-name" style="flex:1; font-size:13px; color:var(--primary-text-color);"></span>
           <span class="phs-member-state" style="font-size:12px; color:var(--secondary-text-color);"></span>
+          <button class="phs-member-remove" data-idx="${i}" title="${_t(hass, "removeMember")}"
+            style="border:none; background:none; cursor:pointer; padding:2px; color:var(--secondary-text-color);">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="${MDI_CLOSE}"/>
+            </svg>
+          </button>
         </div>`
         )
         .join("");
       html += `<div style="font-size:13px; color:var(--secondary-text-color); margin:10px 0 4px;">${_t(hass, "members")} (${this._members.length})</div><div>${rows}</div>`;
+      if (candidates.length) {
+        const opts = candidates
+          .map((id) => {
+            const s = this._hass.states[id];
+            const label = (s && s.attributes && s.attributes.friendly_name) || id;
+            return `<option value="${id}">${label} (${id})</option>`;
+          })
+          .join("");
+        html += `<div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+          <select class="phs-add" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">${opts}</select>
+          <button class="phs-add-btn" style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap;">${_t(hass, "addMember")}</button>
+        </div>`;
+      }
     }
 
     const gid = this._config.group_id;
@@ -923,8 +985,8 @@ class Phs16lcGroupCard extends HTMLElement {
     });
 
     // Lignes membres : état du light + clic -> more-info du luminaire.
-    root.querySelectorAll(".phs-member").forEach((row, i) => {
-      const m = this._members[i];
+    root.querySelectorAll(".phs-member").forEach((row) => {
+      const m = this._members[parseInt(row.dataset.idx, 10)];
       if (!m) return;
       const ls = m.light && this._hass.states[m.light];
       const on = ls && ls.state === "on";
@@ -946,6 +1008,25 @@ class Phs16lcGroupCard extends HTMLElement {
         }
       });
     });
+
+    // Retrait / ajout de membres -> phs16lc.set_group (mise à jour partielle).
+    root.querySelectorAll(".phs-member-remove").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const m = this._members[parseInt(btn.dataset.idx, 10)];
+        if (m) this._removeMember(m);
+      });
+    });
+    const addBtn = root.querySelector(".phs-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const sel = root.querySelector(".phs-add");
+        this._addMember(sel ? sel.value : null);
+      });
+    }
+    const addSel = root.querySelector(".phs-add");
+    if (addSel) addSel.addEventListener("click", (ev) => ev.stopPropagation());
   }
 }
 
