@@ -631,6 +631,44 @@ class Phs16lcGroupCard extends HTMLElement {
       this._error = _t(hass, "entityNotFound") + " (light.*) : " + (this._config.device || this._config.group_id);
       console.warn("[phs16lc-card] groupe sans light", { device: dname, entities: mine.map((e) => e.entity_id) });
     }
+    this._resolveMembers();
+  }
+
+  // Membres du groupe : devices portant le label `<group_id>` (posé par
+  // groups.sync_group_registries sur chaque SPOT membre), hors device du groupe.
+  _resolveMembers() {
+    this._members = [];
+    const gid = this._config.group_id;
+    const hass = this._hass;
+    if (!gid || !hass.devices) return;
+    const ents = Object.values(hass.entities || {});
+    for (const d of Object.values(hass.devices)) {
+      if (this._device && d.id === this._device.id) continue; // le device groupe lui-même
+      if (!(d.labels || []).includes(gid)) continue;
+      let light = ents.find((e) => e.device_id === d.id && e.entity_id.startsWith("light."));
+      if (!light) {
+        const s = Object.values(hass.states || {}).find(
+          (x) =>
+            x.entity_id.startsWith("light.") &&
+            x.attributes &&
+            x.attributes.friendly_name === (d.name_by_user || d.name)
+        );
+        if (s) light = s;
+      }
+      const online = ents.find(
+        (e) => e.device_id === d.id && e.entity_id.startsWith("binary_sensor.")
+      );
+      this._members.push({
+        device: d,
+        light: light ? light.entity_id : null,
+        online: online ? online.entity_id : null,
+      });
+    }
+  }
+
+  _memberOnline(m) {
+    const s = m.online && this._hass.states ? this._hass.states[m.online] : null;
+    return !s || s.state === "on"; // pas de capteur online -> considéré en ligne
   }
 
   _state(role) {
@@ -682,14 +720,20 @@ class Phs16lcGroupCard extends HTMLElement {
 
   _signature() {
     const ids = Object.values(this._ents).filter(Boolean);
-    return JSON.stringify(
+    const memberStates = (this._members || []).map((m) => {
+      const l = m.light && this._hass.states[m.light];
+      const o = m.online && this._hass.states[m.online];
+      return [l && l.state, o && o.state];
+    });
+    return JSON.stringify([
       ids.map((id) => {
         const s = this._hass.states[id];
         if (!s) return null;
         const a = s.attributes || {};
         return [s.state, a.brightness, a.options, a.members, a.online];
-      })
-    );
+      }),
+      memberStates,
+    ]);
   }
 
   _render(force) {
@@ -742,10 +786,13 @@ class Phs16lcGroupCard extends HTMLElement {
       brightness != null
         ? `<span>${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})</span>`
         : "";
+    const onlineCount = (this._members || []).filter((m) => this._memberOnline(m)).length;
     const attrs = light.attributes || {};
-    const membersChip = Array.isArray(attrs.members)
-      ? `<span>${attrs.online != null ? _t(hass, "onlineCount").replace("{on}", attrs.online).replace("{total}", attrs.members.length) : attrs.members.length + " " + _t(hass, "members")}</span>`
-      : "";
+    const membersChip = (this._members || []).length
+      ? `<span>${_t(hass, "onlineCount").replace("{on}", onlineCount).replace("{total}", this._members.length)}</span>`
+      : Array.isArray(attrs.members)
+        ? `<span>${attrs.members.length} ${_t(hass, "members")}</span>`
+        : "";
 
     card.innerHTML = `
       <div style="display:flex; align-items:center; gap:12px;">
@@ -818,6 +865,23 @@ class Phs16lcGroupCard extends HTMLElement {
       </div>`;
     }
 
+    // Liste des luminaires membres (devices portant le label <group_id>).
+    if ((this._members || []).length) {
+      const rows = this._members
+        .map(
+          (m) => `
+        <div class="phs-member" style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--disabled-text-color, #9e9e9e)" aria-hidden="true">
+            <path d="${MDI_LIGHTBULB}"/>
+          </svg>
+          <span class="phs-member-name" style="flex:1; font-size:13px; color:var(--primary-text-color);"></span>
+          <span class="phs-member-state" style="font-size:12px; color:var(--secondary-text-color);"></span>
+        </div>`
+        )
+        .join("");
+      html += `<div style="font-size:13px; color:var(--secondary-text-color); margin:10px 0 4px;">${_t(hass, "members")} (${this._members.length})</div><div>${rows}</div>`;
+    }
+
     const gid = this._config.group_id;
     html += `
       <div style="margin-top:12px; text-align:right;">
@@ -856,6 +920,31 @@ class Phs16lcGroupCard extends HTMLElement {
     saveBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       this._saveAll();
+    });
+
+    // Lignes membres : état du light + clic -> more-info du luminaire.
+    root.querySelectorAll(".phs-member").forEach((row, i) => {
+      const m = this._members[i];
+      if (!m) return;
+      const ls = m.light && this._hass.states[m.light];
+      const on = ls && ls.state === "on";
+      row.querySelector("svg").setAttribute("fill", on ? "var(--state-light-active-color, #ffc107)" : "var(--disabled-text-color, #9e9e9e)");
+      row.querySelector(".phs-member-name").textContent =
+        (m.device && (m.device.name_by_user || m.device.name)) || m.light || "?";
+      row.querySelector(".phs-member-state").textContent =
+        ls ? (ls.state === "unavailable" ? "—" : ls.state) : "—";
+      row.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (m.light) {
+          this.dispatchEvent(
+            new CustomEvent("hass-more-info", {
+              detail: { entityId: m.light },
+              bubbles: true,
+              composed: true,
+            })
+          );
+        }
+      });
     });
   }
 }
