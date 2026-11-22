@@ -1,6 +1,8 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-22 — branche `feature/carte-lovelace`.
+> **Suivi** : 2026-11-22 — **release v1.0.0** (tag `v1.0.0`, subtree push
+> `--prefix=ha-card card-dist master`). Branche de dev : `feature/carte-lovelace`
+> (mergée dans `develop`).
 > P0 fait (squelette, config `device:`/`entity:`, harness `test/index.html`).
 > P1 fait : carte SPOT compacte — on/off + en ligne, recette courante, moyenne temp
 > LED (max en tooltip), bouton power (`light.turn_on/off`), tap → more-info.

@@ -1,5 +1,12 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
+> **v1.0.0 — 2026-11-22** : première release. Carte SPOT (`custom:phs16lc-spot-card`) :
+> état, en ligne, recette, températures, panneau dépliable (luminosité, 16 canaux,
+> enregistrer/supprimer une recette, save NVM). Carte groupe (`custom:phs16lc-group-card`) :
+> recette de groupe, membres (ajout/retrait via `phs16lc.set_group`), save NVM collectif.
+> Nécessite l'intégration **phs16lc >= 1.5.3** pour la liste des membres fiable
+> (attribut `members`) ; sinon repli sur les labels.
+
 Carte compacte pour les luminaires **PHS16-LC** (intégration Home Assistant
 `phs16lc`) : état, recette courante, températures, luminosité, courants des
 16 canaux et actions rapides (on/off, recette, « Sauvegarder NVM »), pour un

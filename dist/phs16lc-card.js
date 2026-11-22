@@ -111,7 +111,7 @@ const MDI_CLOSE =
 const MDI_TRASH =
   "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 
-const CARD_VERSION = "1.0.0-p4";
+const CARD_VERSION = "1.0.0";
 
 // Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
 function _deleteRecipe(el, hass, root) {
