@@ -359,7 +359,8 @@ class Phs16lcSpotCard extends HTMLElement {
 
     // Recette courante (état du select).
     const recipe = this._state("recipe");
-    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipe && recipe.state && recipe.state !== "unknown" ? recipe.state : _t(hass, "noRecipe")}</span>`;
+    const recipeOk = recipe && recipe.state && recipe.state !== "unknown" && recipe.state !== "unavailable";
+    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipeOk ? recipe.state : "—"}</span>`;
 
     // Moyenne des températures LED 1/2 (max en tooltip).
     const t1 = parseFloat(this._state("tempLed1") && this._state("tempLed1").state);
@@ -735,7 +736,8 @@ class Phs16lcGroupCard extends HTMLElement {
 
     // Puces : recette, luminosité (~mA), membres en ligne (attributs optionnels).
     const recipe = this._state("recipe");
-    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipe && recipe.state && recipe.state !== "unknown" ? recipe.state : _t(hass, "noRecipe")}</span>`;
+    const recipeOk = recipe && recipe.state && recipe.state !== "unknown" && recipe.state !== "unavailable";
+    const recipeChip = `<span>${_t(hass, "recipe")} : ${recipeOk ? recipe.state : "—"}</span>`;
     const brightChip =
       brightness != null
         ? `<span>${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})</span>`
