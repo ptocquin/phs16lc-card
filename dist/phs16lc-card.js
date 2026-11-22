@@ -37,6 +37,7 @@ const I18N = {
     needGroupId: "Config : ajouter `group_id:` pour la sauvegarde NVM du groupe",
     addMember: "Ajouter un luminaire",
     removeMember: "Retirer du groupe",
+    noCandidate: "Aucun autre luminaire détecté",
     configError:
       'Config invalide : fournir `device:` (ex. "SPOT 3") ou `entity:` (ex. "light.spot_3").',
     deviceNotFound: "Device introuvable",
@@ -70,6 +71,7 @@ const I18N = {
     needGroupId: "Config: add `group_id:` to save the group NVM",
     addMember: "Add a luminaire",
     removeMember: "Remove from group",
+    noCandidate: "No other luminaire detected",
     configError:
       'Invalid config: provide `device:` (e.g. "SPOT 3") or `entity:` (e.g. "light.spot_3").',
     deviceNotFound: "Device not found",
@@ -978,19 +980,22 @@ class Phs16lcGroupCard extends HTMLElement {
         )
         .join("");
       html += `<div style="font-size:13px; color:var(--secondary-text-color); margin:10px 0 4px;">${_t(hass, "members")} (${this._members.length})</div><div>${rows}</div>`;
-      if (candidates.length) {
-        const opts = candidates
-          .map((id) => {
-            const s = this._hass.states[id];
-            const label = (s && s.attributes && s.attributes.friendly_name) || id;
-            return `<option value="${id}">${label} (${id})</option>`;
-          })
-          .join("");
-        html += `<div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
-          <select class="phs-add" style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">${opts}</select>
-          <button class="phs-add-btn" style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap;">${_t(hass, "addMember")}</button>
-        </div>`;
-      }
+      // Sélecteur d'ajout : affiché même sans candidat (désactivé + indicatif).
+      const candOpts = candidates.length
+        ? candidates
+            .map((id) => {
+              const s = this._hass.states[id];
+              const label = (s && s.attributes && s.attributes.friendly_name) || id;
+              return `<option value="${id}">${label} (${id})</option>`;
+            })
+            .join("")
+        : `<option value="">${_t(hass, "noCandidate")}</option>`;
+      html += `<div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+        <select class="phs-add" ${candidates.length ? "" : "disabled"} title="${_t(hass, "addMember")}"
+          style="flex:1; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:4px;">${candOpts}</select>
+        <button class="phs-add-btn" ${candidates.length ? "" : "disabled"}
+          style="border:1px solid var(--divider-color,#e0e0e0); background:var(--card-background-color,#fff); color:var(--primary-text-color); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap;">${_t(hass, "addMember")}</button>
+      </div>`;
     }
 
     const gid = this._config.group_id;
@@ -1070,7 +1075,7 @@ class Phs16lcGroupCard extends HTMLElement {
       });
     });
     const addBtn = root.querySelector(".phs-add-btn");
-    if (addBtn) {
+    if (addBtn && !addBtn.disabled) {
       addBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const sel = root.querySelector(".phs-add");
