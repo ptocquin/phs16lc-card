@@ -8,6 +8,11 @@
 > canal (`phs16lc.set_channel`, adresse extraite de l'unique_id), températures
 > détaillées, selects recette/groupe, bouton « Sauvegarder NVM ». Re-render par
 > signature d'état (pas de perte de focus pendant un drag).
+> Essai réel : procédure dans `README.md` « Tester sur l'instance HA de dev » — JS
+> copié dans `~/.hass_dev/www/phs16lc-card.js` (servi en 200 sur
+> `/local/phs16lc-card.js`), ressource + carte à ajouter via l'UI. Note : le lien
+> série de l'instance de dev était cassé (pty mort) au 2026-11-22 — à repointer via
+> `fake_spot.py` + options flow avant un test avec données vivantes.
 
 Carte frontend pour les luminaires PHS16-LC : vue compacte par SPOT et par groupe
 de luminaires, avec accès rapide aux actions principales (on/off, recette,

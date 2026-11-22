@@ -40,6 +40,31 @@ SPOT individuel ou un groupe de luminaires.
 
 La carte suit la langue de Home Assistant (français / anglais).
 
+## Tester sur l'instance HA de dev (macOS)
+
+1. Copier le JS dans le `www/` de dev (servi sans auth sur `/local/`) :
+   `cp ha-card/dist/phs16lc-card.js ~/.hass_dev/www/phs16lc-card.js`
+   (vérifié : `curl -s -o /dev/null -w "%{http_code}" http://localhost:8123/local/phs16lc-card.js` → 200).
+2. Dans HA : tableau de bord → menu ⋮ (haut droite) → **Ressources** → ajouter une
+   ressource de type **Module**, URL `/local/phs16lc-card.js`.
+3. Ajouter une carte de test (elle apparaît aussi dans le sélecteur « Personnalisée »
+   sous « PHS16-LC — SPOT ») :
+   ```yaml
+   type: custom:phs16lc-spot-card
+   device: SPOT 1
+   ```
+4. **Cmd+Shift+R** après chaque mise à jour du fichier JS (cache navigateur).
+5. Si le lien série est mort (erreurs `termios.error: (6, 'Device not configured')`
+   dans le log : pty d'un ancien `fake_spot` fermé), relancer le simulateur :
+   ```
+   cd ha-integration
+   .venv-ha/bin/python ../light-monitor/tools/fake_spot.py --boards 3 --channels 16 --duration 86400 > /tmp/phs_port_new.txt 2>/tmp/fake_spot.log &
+   sleep 1 && cat /tmp/phs_port_new.txt
+   ```
+   puis Réglages → Appareils et services → PHS16-LC → ⋮ → **Configurer** → Port = ce
+   pty → **Recharger** l'entrée. Les trames reçues par le faux SPOT sont dans
+   `/tmp/fake_spot.log` (vérifier `@SP` au slider canal, `@WP` au bouton NVM).
+
 ## Développement
 
 Voir `PLAN.md` (phases P0–P5). JS vanilla sans build, testable hors HA via
