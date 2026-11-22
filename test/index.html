@@ -2,20 +2,21 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Test harness — phs16lc-card (P0)</title>
+<title>Test harness — phs16lc-card (P1)</title>
 <style>
   body { font-family: sans-serif; margin: 24px; background: #fafafa; color: #212121; }
-  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: 900px; }
+  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; max-width: 1000px; }
   .label { font-size: 12px; color: #757575; margin: 16px 0 4px; }
 </style>
 </head>
 <body>
-<h3>Harnais de test — phs16lc-card (P0)</h3>
-<p>Objet <code>hass</code> mocké : ouvrir cette page dans un navigateur, pas besoin d'instance HA.</p>
+<h3>Harnais de test — phs16lc-card (P1)</h3>
+<p>Objet <code>hass</code> mocké : ouvrir cette page dans un navigateur, pas besoin d'instance HA.
+Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bascule l'état et re-render).</p>
 
-<div class="label">Config device: "SPOT 3" (résolution via device registry)</div>
+<div class="label">Config device: "SPOT 3" — allumé, recette floraison.json, LED 31/34 °C, en ligne</div>
 <div id="cards"></div>
-<div class="label">Config entity: "light.spot_7" (direct)</div>
+<div class="label">Config entity: "light.spot_7" — éteint, hors ligne (résolution device seule : pas de puces)</div>
 <div id="cards2"></div>
 <div class="label">Config invalide (device inconnu) → erreur rendue dans la carte</div>
 <div id="cards3"></div>
@@ -33,7 +34,12 @@
     });
   }
 
-  // hass mocké : 2 devices SPOT avec leurs entités phs16lc.
+  const E = (entity_id, device_id, translation_key) => ({
+    entity_id, device_id, platform: "phs16lc", translation_key,
+    unique_id: "entry1_" + entity_id.replace(/\./g, "_"),
+  });
+
+  // hass mocké : 2 devices SPOT avec toutes leurs entités phs16lc.
   window.hass = {
     locale: { language: "fr" },
     devices: {
@@ -41,15 +47,38 @@
       dev_spot7: { id: "dev_spot7", name: "SPOT 7", name_by_user: "Luminaire nord" },
     },
     entities: {
-      "light.spot_3": { entity_id: "light.spot_3", device_id: "dev_spot3", platform: "phs16lc" },
-      "sensor.spot_3_currents": { entity_id: "sensor.spot_3_currents", device_id: "dev_spot3", platform: "phs16lc", translation_key: "currents" },
-      "light.spot_7": { entity_id: "light.spot_7", device_id: "dev_spot7", platform: "phs16lc" },
+      "light.spot_3": E("light.spot_3", "dev_spot3", null),
+      "binary_sensor.spot_3_online": E("binary_sensor.spot_3_online", "dev_spot3", "spot_online"),
+      "sensor.spot_3_temperature_cpu": E("sensor.spot_3_temperature_cpu", "dev_spot3", "temp_cpu"),
+      "sensor.spot_3_temperature_led1": E("sensor.spot_3_temperature_led1", "dev_spot3", "temp_led1"),
+      "sensor.spot_3_temperature_led2": E("sensor.spot_3_temperature_led2", "dev_spot3", "temp_led2"),
+      "sensor.spot_3_courants": E("sensor.spot_3_courants", "dev_spot3", "currents"),
+      "select.spot_3_recette": E("select.spot_3_recette", "dev_spot3", "recipe"),
+      "select.spot_3_groupe": E("select.spot_3_groupe", "dev_spot3", "group"),
+      "button.spot_3_sauvegarder_nvm": E("button.spot_3_sauvegarder_nvm", "dev_spot3", "save_nvm"),
+      "light.spot_7": E("light.spot_7", "dev_spot7", null),
+      "binary_sensor.spot_7_online": E("binary_sensor.spot_7_online", "dev_spot7", "spot_online"),
     },
     states: {
       "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200 } },
+      "binary_sensor.spot_3_online": { entity_id: "binary_sensor.spot_3_online", state: "on", attributes: { friendly_name: "SPOT 3 En ligne" } },
+      "sensor.spot_3_temperature_cpu": { entity_id: "sensor.spot_3_temperature_cpu", state: "29.5", attributes: { unit_of_measurement: "°C" } },
+      "sensor.spot_3_temperature_led1": { entity_id: "sensor.spot_3_temperature_led1", state: "31.2", attributes: { unit_of_measurement: "°C" } },
+      "sensor.spot_3_temperature_led2": { entity_id: "sensor.spot_3_temperature_led2", state: "33.8", attributes: { unit_of_measurement: "°C" } },
+      "sensor.spot_3_courants": { entity_id: "sensor.spot_3_courants", state: "800x16", attributes: { channels: Array(16).fill(800) } },
+      "select.spot_3_recette": { entity_id: "select.spot_3_recette", state: "floraison.json", attributes: { options: ["croissance.json", "floraison.json"] } },
+      "select.spot_3_groupe": { entity_id: "select.spot_3_groupe", state: "canaux_1_8", attributes: { options: ["canaux_1_8", "canaux_9_16"] } },
       "light.spot_7": { entity_id: "light.spot_7", state: "off", attributes: { friendly_name: "Luminaire nord" } },
+      "binary_sensor.spot_7_online": { entity_id: "binary_sensor.spot_7_online", state: "off", attributes: {} },
     },
-    callService(domain, service, data) { console.log("callService", domain, service, data); },
+    callService(domain, service, data) {
+      console.log("callService", domain, service, data);
+      if (domain === "light" && (service === "turn_on" || service === "turn_off")) {
+        const id = data.entity_id;
+        window.hass.states[id] = { ...window.hass.states[id], state: service === "turn_on" ? "on" : "off" };
+        document.querySelectorAll("phs16lc-spot-card").forEach((c) => { c.hass = window.hass; });
+      }
+    },
   };
 </script>
 <script src="../dist/phs16lc-card.js"></script>
@@ -64,12 +93,6 @@
   makeCard({ device: "SPOT 3" }, "cards");
   makeCard({ entity: "light.spot_7" }, "cards2");
   makeCard({ device: "SPOT 99" }, "cards3");
-
-  // Re-render après changement d'état (simule un polling HA).
-  setTimeout(() => {
-    window.hass.states["light.spot_3"] = { entity_id: "light.spot_3", state: "off", attributes: { friendly_name: "SPOT 3" } };
-    document.querySelectorAll("phs16lc-spot-card").forEach((c) => { c.hass = window.hass; });
-  }, 3000);
 </script>
 </body>
 </html>
