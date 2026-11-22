@@ -38,14 +38,11 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
     });
   }
 
-  // unique_id au format réel de l'intégration : `<entry_id>_spot_<n>_<entity_key>`
-  // (ou `<entry_id>_group_<id>_light` pour un light de groupe)
-  const E = (entity_id, device_id, translation_key) => {
-    const n = (entity_id.match(/spot_(\d+)/) || [])[1];
-    const key = entity_id.startsWith("light.") ? "light" : translation_key || entity_id.split(".").pop();
-    const unique_id = n ? `cfg_spot_${n}_${key}` : `cfg_group_${entity_id.split(".").pop()}_light`;
-    return { entity_id, device_id, platform: "phs16lc", translation_key, unique_id };
-  };
+  // Le registry frontend "display" n'expose PAS unique_id : le mock ne le fournit pas,
+  // la carte doit se débrouiller avec entity_id + nom de device (comme en réel).
+  const E = (entity_id, device_id, translation_key) => ({
+    entity_id, device_id, platform: "phs16lc", translation_key,
+  });
 
   // hass mocké : 2 devices SPOT avec toutes leurs entités phs16lc.
   window.hass = {
@@ -69,9 +66,9 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "light.spot_7": E("light.spot_7", "dev_spot7", null),
       "binary_sensor.spot_7_online": E("binary_sensor.spot_7_online", "dev_spot7", "spot_online"),
       // SPOT 9 : pas de device_id exposé -> repli par friendly_name
-      "light.spot_9": { entity_id: "light.spot_9", device_id: "dev_spot9", platform: "phs16lc", translation_key: null, unique_id: "cfg_spot_9_light" },
-      "select.spot_9_recette": { entity_id: "select.spot_9_recette", device_id: null, platform: "phs16lc", translation_key: "recipe", unique_id: "cfg_spot_9_recipe" },
-      "binary_sensor.spot_9_online": { entity_id: "binary_sensor.spot_9_online", device_id: "dev_spot9", platform: "phs16lc", translation_key: "spot_online", unique_id: "cfg_spot_9_online" },
+      "light.spot_9": { entity_id: "light.spot_9", device_id: "dev_spot9", platform: "phs16lc", translation_key: null },
+      "select.spot_9_recette": { entity_id: "select.spot_9_recette", device_id: null, platform: "phs16lc", translation_key: "recipe" },
+      "binary_sensor.spot_9_online": { entity_id: "binary_sensor.spot_9_online", device_id: "dev_spot9", platform: "phs16lc", translation_key: "spot_online" },
       "light.serre_1_nord": E("light.serre_1_nord", "dev_g1", null),
       "select.serre_1_nord_recette": E("select.serre_1_nord_recette", "dev_g1", "recipe"),
     },
@@ -126,7 +123,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
         // le backend réécrit groups.json ; l'attribut `members` du light du groupe suit
         const spots = data.spots || [];
         const addresses = spots
-          .map((s) => (window.hass.entities[s].unique_id.match(/_spot_(\d+)_light$/) || [])[1])
+          .map((s) => (s.match(/^light\.spot_(\d+)$/) || [])[1])
           .filter(Boolean)
           .map(Number)
           .sort((a, b) => a - b);

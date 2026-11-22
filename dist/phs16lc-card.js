@@ -653,23 +653,17 @@ class Phs16lcGroupCard extends HTMLElement {
     const hass = this._hass;
     const ents = Object.values(hass.entities || {});
     const devs = Object.values(hass.devices || {});
-    const bySuffix = (suffix) => ents.find((e) => (e.unique_id || "").endsWith(suffix));
     const light = this._state("light");
     const attrs = (light && light.attributes) || {};
 
     if (Array.isArray(attrs.members) && attrs.members.length) {
       for (const addr of attrs.members) {
-        const l =
-          bySuffix(`_spot_${addr}_light`) ||
-          ents.find((e) => e.entity_id === `light.spot_${addr}`);
-        const o = bySuffix(`_spot_${addr}_online`);
-        const lReg = l && ents.find((e) => e.entity_id === l.entity_id);
-        const dev = lReg && lReg.device_id ? devs.find((d) => d.id === lReg.device_id) : null;
+        const spot = this._spotEntities(addr);
         this._members.push({
           address: addr,
-          device: dev || null,
-          light: l ? l.entity_id : null,
-          online: o ? o.entity_id : null,
+          device: spot.device,
+          light: spot.light,
+          online: spot.online,
         });
       }
       console.debug("[phs16lc-card] membres via attribut `members` :", this._members.map((m) => m.light));
@@ -714,17 +708,50 @@ class Phs16lcGroupCard extends HTMLElement {
     return (this._members || []).map((m) => m.light).filter(Boolean);
   }
 
-  // Luminaires SPOT candidats à l'ajout : lights phs16lc dont l'unique_id est
-  // `..._spot_<n>_light` (les lights de groupes sont `..._group_<id>_light`).
+  // Entités d'un SPOT d'adresse donnée, retrouvées SANS dépendre de l'unique_id
+  // (le registry frontend "display" ne l'expose pas) : entity_id light.spot_<n>,
+  // puis device nommé « SPOT <n> », puis suffixe d'unique_id si présent.
+  _spotEntities(addr) {
+    const hass = this._hass;
+    const ents = Object.values(hass.entities || {});
+    const devs = hass.devices || {};
+    const bySuffix = (suffix) => ents.find((e) => (e.unique_id || "").endsWith(suffix));
+    const devOf = (e) => (e.device_id && devs[e.device_id]) || null;
+    const isSpotDev = (d) => d && /^spot\s*\d+$/i.test(d.name_by_user || d.name || "");
+    const byDevName = (domain) =>
+      ents.find((e) => e.entity_id.startsWith(domain + ".") && isSpotDev(devOf(e)) &&
+        _norm((devOf(e).name_by_user || devOf(e).name)) === "spot " + addr);
+    const light =
+      bySuffix(`_spot_${addr}_light`) ||
+      ents.find((e) => e.entity_id === `light.spot_${addr}`) ||
+      byDevName("light");
+    const online =
+      bySuffix(`_spot_${addr}_online`) ||
+      ents.find((e) => e.entity_id === `binary_sensor.spot_${addr}_online`) ||
+      byDevName("binary_sensor");
+    const lReg = light && ents.find((e) => e.entity_id === light.entity_id);
+    return {
+      light: light ? light.entity_id : null,
+      online: online ? online.entity_id : null,
+      device: lReg ? devOf(lReg) : null,
+    };
+  }
+
+  // Luminaires SPOT candidats à l'ajout : devices nommés « SPOT <n> » (convention
+  // de l'intégration) ou entity_id light.spot_<n>, non déjà membres du groupe.
   _candidateSpots() {
+    const hass = this._hass;
+    const ents = Object.values(hass.entities || {});
+    const devs = hass.devices || {};
     const current = new Set(this._memberSpots());
-    return Object.values(this._hass.entities || {})
-      .filter(
-        (e) =>
-          e.entity_id.startsWith("light.") &&
-          /_spot_\d+_light$/.test(e.unique_id || "") &&
-          !current.has(e.entity_id)
-      )
+    return ents
+      .filter((e) => {
+        if (!e.entity_id.startsWith("light.") || current.has(e.entity_id)) return false;
+        if (/^light\.spot_\d+$/.test(e.entity_id)) return true;
+        if (/_spot_\d+_light$/.test(e.unique_id || "")) return true;
+        const d = e.device_id ? devs[e.device_id] : null;
+        return !!d && /^spot\s*\d+$/i.test(d.name_by_user || d.name || "");
+      })
       .map((e) => e.entity_id);
   }
 
