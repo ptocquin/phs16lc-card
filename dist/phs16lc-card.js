@@ -96,6 +96,26 @@ function _pick(list, translationKey, idHint) {
   return e ? e.entity_id : null;
 }
 
+// Normalisation pour matcher un nom de device à l'aveugle : "Serre 1 Nord",
+// "serre_1_nord" et "Serre 1 — Nord" donnent la même clé.
+function _norm(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function _findDevice(hass, ref) {
+  const want = _norm(ref);
+  return Object.values(hass.devices || {}).find(
+    (d) => d.id === ref || _norm(d.name) === want || _norm(d.name_by_user) === want
+  );
+}
+
+function _deviceNames(hass) {
+  return Object.values(hass.devices || {})
+    .map((d) => d.name_by_user || d.name)
+    .filter(Boolean)
+    .join(", ");
+}
+
 class Phs16lcSpotCard extends HTMLElement {
   constructor() {
     super();
@@ -104,6 +124,7 @@ class Phs16lcSpotCard extends HTMLElement {
     this._device = null;
     this._ents = {}; // entity_id par rôle : light, online, tempCpu, tempLed1, tempLed2, currents, recipe, group, saveNvm
     this._error = null;
+    this._errorDetail = null;
     this._expanded = false;
     this._built = false;
     this._sig = "";
@@ -136,6 +157,7 @@ class Phs16lcSpotCard extends HTMLElement {
   _resolve() {
     const hass = this._hass;
     this._error = null;
+    this._errorDetail = null;
     this._device = null;
     this._ents = {};
     if (this._config.entity) {
@@ -145,16 +167,13 @@ class Phs16lcSpotCard extends HTMLElement {
       }
       return;
     }
-    const wanted = String(this._config.device).toLowerCase();
-    const device = Object.values(hass.devices || {}).find(
-      (d) =>
-        d.id === this._config.device ||
-        (d.name && d.name.toLowerCase() === wanted) ||
-        (d.name_by_user && d.name_by_user.toLowerCase() === wanted)
-    );
+    // `device:` prioritaire, `group_id:` accepté comme repli (carte groupe).
+    const ref = this._config.device || this._config.group_id;
+    const device = _findDevice(hass, ref);
     if (!device) {
-      this._error = _t(hass, "deviceNotFound") + " : " + this._config.device;
-      console.warn("[phs16lc-card] devices vus :", Object.values(hass.devices || {}).map((d) => d.name));
+      this._error = _t(hass, "deviceNotFound") + " : " + ref;
+      this._errorDetail = _deviceNames(hass);
+      console.warn("[phs16lc-card] devices vus :", this._errorDetail);
       return;
     }
     this._device = device;
@@ -308,6 +327,12 @@ class Phs16lcSpotCard extends HTMLElement {
       msg.style.color = "var(--error-color, #db4437)";
       msg.textContent = this._error || _t(hass, "entityNotFound");
       card.appendChild(msg);
+      if (this._errorDetail) {
+        const det = document.createElement("div");
+        det.style.cssText = "font-size:11px; color:var(--secondary-text-color); margin-top:4px;";
+        det.textContent = this._errorDetail;
+        card.appendChild(det);
+      }
       this.replaceChildren(card);
       return;
     }
@@ -535,6 +560,7 @@ class Phs16lcGroupCard extends HTMLElement {
     this._device = null;
     this._ents = {};
     this._error = null;
+    this._errorDetail = null;
     this._expanded = false;
     this._built = false;
     this._sig = "";
@@ -549,7 +575,7 @@ class Phs16lcGroupCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || (!config.device && !config.entity)) {
+    if (!config || (!config.device && !config.entity && !config.group_id)) {
       throw new Error(I18N.fr.configError + " / " + I18N.en.configError);
     }
     this._config = config;
@@ -565,22 +591,20 @@ class Phs16lcGroupCard extends HTMLElement {
   _resolve() {
     const hass = this._hass;
     this._error = null;
+    this._errorDetail = null;
     this._device = null;
     this._ents = {};
     if (this._config.entity) {
       this._ents.light = this._config.entity;
       return;
     }
-    const wanted = String(this._config.device).toLowerCase();
-    const device = Object.values(hass.devices || {}).find(
-      (d) =>
-        d.id === this._config.device ||
-        (d.name && d.name.toLowerCase() === wanted) ||
-        (d.name_by_user && d.name_by_user.toLowerCase() === wanted)
-    );
+    // `device:` prioritaire, `group_id:` accepté comme repli (carte groupe).
+    const ref = this._config.device || this._config.group_id;
+    const device = _findDevice(hass, ref);
     if (!device) {
-      this._error = _t(hass, "deviceNotFound") + " : " + this._config.device;
-      console.warn("[phs16lc-card] devices vus :", Object.values(hass.devices || {}).map((d) => d.name));
+      this._error = _t(hass, "deviceNotFound") + " : " + ref;
+      this._errorDetail = _deviceNames(hass);
+      console.warn("[phs16lc-card] devices vus :", this._errorDetail);
       return;
     }
     this._device = device;
@@ -603,7 +627,7 @@ class Phs16lcGroupCard extends HTMLElement {
     }
     this._ents.recipe = _pick(byDomain("select"), "recipe", "recipe");
     if (!this._ents.light) {
-      this._error = _t(hass, "entityNotFound") + " (light.*) : " + this._config.device;
+      this._error = _t(hass, "entityNotFound") + " (light.*) : " + (this._config.device || this._config.group_id);
       console.warn("[phs16lc-card] groupe sans light", { device: dname, entities: mine.map((e) => e.entity_id) });
     }
   }
@@ -692,6 +716,12 @@ class Phs16lcGroupCard extends HTMLElement {
       msg.style.color = "var(--error-color, #db4437)";
       msg.textContent = this._error || _t(hass, "entityNotFound");
       card.appendChild(msg);
+      if (this._errorDetail) {
+        const det = document.createElement("div");
+        det.style.cssText = "font-size:11px; color:var(--secondary-text-color); margin-top:4px;";
+        det.textContent = this._errorDetail;
+        card.appendChild(det);
+      }
       this.replaceChildren(card);
       return;
     }
