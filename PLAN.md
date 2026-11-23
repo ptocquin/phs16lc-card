@@ -128,8 +128,11 @@ carte groupe sans config explicite.
 
 ## 4. Dépôt & distribution (Marketplace HA 2026.11+, plus de HACS)
 
-- Dépôt GitHub dédié `phs16lc-card` (public, ou privé via la connexion GitHub
-  comme `phs16lc-ha`), servi à la racine par subtree :
+- Dépôt GitHub dédié `phs16lc-card` (**public obligatoire** — le Marketplace ne lit
+  que des dépôts publics ; un dépôt privé, même listé via un PAT, échoue à
+  l'installation avec « missing the hacs.json file » car les téléchargements de
+  fichiers passent par raw.githubusercontent.com sans le token), servi à la racine
+  par subtree :
   `git subtree push --prefix=ha-card card-dist master`.
 - Structure exigée (doc `repository-structure`) pour un « dashboard plugin » :
   - `hacs.json` à la racine : `{ "name": "PHS16-LC Card",
