@@ -14,7 +14,7 @@
 <p>Objet <code>hass</code> mocké : ouvrir cette page dans un navigateur, pas besoin d'instance HA.
 Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bascule l'état et re-render).</p>
 
-<div class="label">Config device: "SPOT 3" — allumé, recette floraison.json, LED 31/34 °C, en ligne</div>
+<div class="label">Config device: "SPOT 3" — allumé, recette floraison.json (backend D23/D24 : slider = % de la recette, canaux bornés au max LED), LED 31/34 °C, en ligne</div>
 <div id="cards"></div>
 <div class="label">Config entity: "light.spot_7" — éteint, hors ligne (résolution device seule : pas de puces)</div>
 <div id="cards2"></div>
@@ -43,6 +43,10 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
   const E = (entity_id, device_id, translation_key) => ({
     entity_id, device_id, platform: "phs16lc", translation_key,
   });
+
+  // Table max LED par canal (GUIDE intégration §10) — présente sur les lights depuis
+  // le backend D24 ; sa présence fait passer la carte en mode « variateur de recette ».
+  const LED_MAX = [1400, 1800, 1000, 1400, 1000, 1800, 1400, 2000, 1000, 1800, 1400, 2000, 1400, 1800, 1000, 1400];
 
   // hass mocké : 2 devices SPOT avec toutes leurs entités phs16lc.
   window.hass = {
@@ -73,7 +77,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "select.serre_1_nord_recette": E("select.serre_1_nord_recette", "dev_g1", "recipe"),
     },
     states: {
-      "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200 } },
+      "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200, recette: "floraison.json", led_max: LED_MAX, channels_ma: Array(16).fill(800) } },
       "binary_sensor.spot_3_online": { entity_id: "binary_sensor.spot_3_online", state: "on", attributes: { friendly_name: "SPOT 3 En ligne" } },
       "sensor.spot_3_temperature_cpu": { entity_id: "sensor.spot_3_temperature_cpu", state: "29.5", attributes: { unit_of_measurement: "°C" } },
       "sensor.spot_3_temperature_led1": { entity_id: "sensor.spot_3_temperature_led1", state: "31.2", attributes: { unit_of_measurement: "°C" } },
@@ -83,7 +87,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "select.spot_3_groupe": { entity_id: "select.spot_3_groupe", state: "canaux_1_8", attributes: { options: ["canaux_1_8", "canaux_9_16"] } },
       "light.spot_7": { entity_id: "light.spot_7", state: "off", attributes: { friendly_name: "Luminaire nord" } },
       "binary_sensor.spot_7_online": { entity_id: "binary_sensor.spot_7_online", state: "off", attributes: {} },
-      "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128 } },
+      "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128, recette: "croissance.json", led_max: LED_MAX } },
       "select.spot_9_recette": { entity_id: "select.spot_9_recette", state: "croissance.json", attributes: { options: ["croissance.json"] } },
       "binary_sensor.spot_9_online": { entity_id: "binary_sensor.spot_9_online", state: "off", attributes: {} },
       "light.serre_1_nord": { entity_id: "light.serre_1_nord", state: "on", attributes: { friendly_name: "serre_1_nord", brightness: 180, members: [3, 9] } },  // attribut `members` = source de vérité (backend >= v1.5.3)

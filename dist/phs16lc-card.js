@@ -21,6 +21,9 @@ const I18N = {
     noRecipe: "Aucune recette",
     ledTemp: "LED",
     max: "max",
+    pctOfRecipe: "{pct} % de la recette",
+    dimmerHint: "Le curseur dimme la recette active — choisissez d'abord une recette",
+    maxLed: "max LED {ma} mA",
     powerOn: "Allumer",
     powerOff: "Éteindre",
     expand: "Déplier",
@@ -62,6 +65,9 @@ const I18N = {
     noRecipe: "No recipe",
     ledTemp: "LED",
     max: "max",
+    pctOfRecipe: "{pct} % of recipe",
+    dimmerHint: "The slider dims the active recipe — pick a recipe first",
+    maxLed: "LED max {ma} mA",
     powerOn: "Turn on",
     powerOff: "Turn off",
     expand: "Expand",
@@ -111,7 +117,7 @@ const MDI_CLOSE =
 const MDI_TRASH =
   "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 // Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
 function _deleteRecipe(el, hass, root) {
@@ -379,7 +385,7 @@ class Phs16lcSpotCard extends HTMLElement {
         const s = this._hass.states[id];
         if (!s) return null;
         const a = s.attributes || {};
-        return [s.state, a.brightness, a.channels, a.options];
+        return [s.state, a.brightness, a.channels, a.options, a.recette, a.led_max];
       })
     );
   }
@@ -500,24 +506,28 @@ class Phs16lcSpotCard extends HTMLElement {
 
   _renderDetails(root, hass, lang) {
     const light = this._state("light");
-    const brightness =
-      light.attributes && light.attributes.brightness != null
-        ? light.attributes.brightness
-        : light.state === "on"
-          ? 255
-          : 0;
+    const attrs = (light && light.attributes) || {};
+    const brightness = attrs.brightness != null ? attrs.brightness : light.state === "on" ? 255 : 0;
+    // Backend >= D23/D24 (attribut `led_max` présent) : le slider est un VARIATEUR de
+    // la recette active (attribut `recette`), pas un réglage de courant uniforme.
+    const ledMax = Array.isArray(attrs.led_max) ? attrs.led_max : null;
+    const isDimmer = ledMax !== null;
+    const activeRecipe = attrs.recette || null;
+    const dimDisabled = isDimmer && !activeRecipe;
     const showChannels = this._config.show_channels !== false;
     const currents = this._state("currents");
     const channels = currents && currents.attributes && currents.attributes.channels;
 
-    // Mapping luminosité HA (1-255) -> mA (linéaire 74-2150, cf. intégration).
+    // Ancien backend (sans `led_max`) : mapping luminosité HA (1-255) -> mA linéaire 74-2150.
     const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
+    const pctOf = (b) => Math.round((b / 255) * 100);
 
     let html = `
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "brightness")}</span>
         <input class="phs-brightness" type="range" min="0" max="255" step="1"
-          value="${brightness}"
+          value="${brightness}"${dimDisabled ? " disabled" : ""}
+          title="${dimDisabled ? _t(hass, "dimmerHint") : ""}"
           style="flex:1; accent-color:var(--primary-color);">
         <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
       </div>`;
@@ -557,18 +567,22 @@ class Phs16lcSpotCard extends HTMLElement {
     };
     html += selRow("recipe", "recipe") + selRow("group", "group");
 
-    // 16 sliders de canaux.
+    // 16 sliders de canaux — bornés au max LED du canal quand le backend expose
+    // `led_max` (D24 : le clamp est aussi appliqué côté serveur, le slider reflète
+    // la limite matérielle).
     if (showChannels && Array.isArray(channels) && channels.length) {
       const items = channels
-        .map(
-          (ma, i) => `
+        .map((ma, i) => {
+          const cmax = ledMax ? ledMax[i] ?? 2150 : 2150;
+          return `
         <div style="display:flex; align-items:center; gap:6px;">
           <span style="font-size:11px; color:var(--secondary-text-color); width:24px;">C${i + 1}</span>
-          <input class="phs-channel" data-idx="${i}" type="range" min="0" max="2150" step="10"
-            value="${ma}" style="flex:1; accent-color:var(--primary-color);">
+          <input class="phs-channel" data-idx="${i}" type="range" min="0" max="${cmax}" step="10"
+            value="${ma}" title="${ledMax ? _t(hass, "maxLed").replace("{ma}", cmax) : ""}"
+            style="flex:1; accent-color:var(--primary-color);">
           <span class="phs-channel-val" style="font-size:11px; color:var(--secondary-text-color); width:58px; text-align:right;">${ma} ${_t(hass, "ma")}</span>
-        </div>`
-        )
+        </div>`;
+        })
         .join("");
       html += `
         <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${_t(hass, "channels")} (${_t(hass, "ma")})</div>
@@ -595,7 +609,14 @@ class Phs16lcSpotCard extends HTMLElement {
     const bVal = root.querySelector(".phs-brightness-val");
     const paintB = () => {
       const v = parseInt(bSlider.value, 10);
-      bVal.textContent = v === 0 ? _t(hass, "off") : `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+      if (v === 0) {
+        bVal.textContent = _t(hass, "off");
+      } else if (isDimmer) {
+        // D23 : le slider affiche le % de la recette active
+        bVal.textContent = _t(hass, "pctOfRecipe").replace("{pct}", pctOf(v));
+      } else {
+        bVal.textContent = `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+      }
     };
     paintB();
     bSlider.addEventListener("input", paintB);
@@ -806,6 +827,17 @@ class Phs16lcGroupCard extends HTMLElement {
     return !s || s.state === "on"; // pas de capteur online -> considéré en ligne
   }
 
+  // Table `led_max` du premier membre qui l'expose (backend >= D23/D24) : sert à
+  // détecter que le slider du groupe est un variateur de recette. null = ancien backend.
+  _groupLedMax() {
+    for (const m of this._members || []) {
+      const s = m.light && this._hass.states ? this._hass.states[m.light] : null;
+      const lm = s && s.attributes && s.attributes.led_max;
+      if (Array.isArray(lm)) return lm;
+    }
+    return null;
+  }
+
   // Entity_id des lights des membres actuels (pour set_group spots=[...]).
   _memberSpots() {
     return (this._members || []).map((m) => m.light).filter(Boolean);
@@ -945,7 +977,7 @@ class Phs16lcGroupCard extends HTMLElement {
       const l = m.light && this._hass.states[m.light];
       const o = m.online && this._hass.states[m.online];
       // inclure id/adresse : un changement de membres doit re-rendre même si les états sont identiques
-      return [m.light, m.address, l && l.state, o && o.state];
+      return [m.light, m.address, l && l.state, o && o.state, l && l.attributes && l.attributes.recette];
     });
     return JSON.stringify([
       ids.map((id) => {
@@ -1004,9 +1036,15 @@ class Phs16lcGroupCard extends HTMLElement {
     const recipe = this._state("recipe");
     const recipeOk = recipe && recipe.state && recipe.state !== "unknown" && recipe.state !== "unavailable";
     const recipeChip = `<span>${_t(hass, "recipe")} : ${recipeOk ? recipe.state : "—"}</span>`;
+    // Backend >= D23/D24 (un membre expose `led_max`) : luminosité = % de la recette.
+    const groupDimmer = this._groupLedMax() !== null;
     const brightChip =
       brightness != null
-        ? `<span>${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})</span>`
+        ? `<span>${
+            groupDimmer
+              ? _t(hass, "pctOfRecipe").replace("{pct}", Math.round((brightness / 255) * 100))
+              : `${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})`
+          }</span>`
         : "";
     const onlineCount = (this._members || []).filter((m) => this._memberOnline(m)).length;
     const attrs = light.attributes || {};
@@ -1059,18 +1097,21 @@ class Phs16lcGroupCard extends HTMLElement {
   }
 
   _renderDetails(root, hass, lang, light) {
-    const brightness =
-      light.attributes && light.attributes.brightness != null
-        ? light.attributes.brightness
-        : light.state === "on"
-          ? 255
-          : 0;
+    const attrs = (light && light.attributes) || {};
+    const brightness = attrs.brightness != null ? attrs.brightness : light.state === "on" ? 255 : 0;
     const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
+    const pctOf = (b) => Math.round((b / 255) * 100);
+    // Backend >= D23/D24 : le slider du groupe dimme la recette des membres.
+    const isDimmer = this._groupLedMax() !== null;
+    const recipeSel = this._state("recipe");
+    const recipeOk = recipeSel && recipeSel.state && recipeSel.state !== "unknown" && recipeSel.state !== "unavailable";
+    const dimDisabled = isDimmer && !recipeOk;
 
     let html = `
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:13px; color:var(--secondary-text-color); min-width:90px;">${_t(hass, "brightness")}</span>
         <input class="phs-brightness" type="range" min="0" max="255" step="1" value="${brightness}"
+          ${dimDisabled ? "disabled" : ""} title="${dimDisabled ? _t(hass, "dimmerHint") : ""}"
           style="flex:1; accent-color:var(--primary-color);">
         <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
       </div>`;
@@ -1147,7 +1188,13 @@ class Phs16lcGroupCard extends HTMLElement {
     const bVal = root.querySelector(".phs-brightness-val");
     const paintB = () => {
       const v = parseInt(bSlider.value, 10);
-      bVal.textContent = v === 0 ? _t(hass, "off") : `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+      if (v === 0) {
+        bVal.textContent = _t(hass, "off");
+      } else if (isDimmer) {
+        bVal.textContent = _t(hass, "pctOfRecipe").replace("{pct}", pctOf(v));
+      } else {
+        bVal.textContent = `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
+      }
     };
     paintB();
     bSlider.addEventListener("input", paintB);

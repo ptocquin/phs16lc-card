@@ -1,5 +1,11 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
+> **v1.1.0 — 2026-11-24** : adaptation au backend D23/D24 — le slider luminosité
+> est un **variateur de la recette active** (affiché en % de la recette, désactivé
+> tant qu'aucune recette n'est choisie) et les 16 sliders canal sont **bornés au
+> courant max LED de chaque canal** (attribut `led_max` exposé par l'intégration ;
+> le clamp reste appliqué côté serveur de toute façon). Détection automatique :
+> attribut `led_max` présent = nouveau mode, absent = ancien affichage (~mA).
 > **v1.0.0 — 2026-11-22** : première release. Carte SPOT (`custom:phs16lc-spot-card`) :
 > état, en ligne, recette, températures, panneau dépliable (luminosité, 16 canaux,
 > enregistrer/supprimer une recette, save NVM). Carte groupe (`custom:phs16lc-group-card`) :
@@ -46,6 +52,19 @@ SPOT individuel ou un groupe de luminaires.
 ```
 
 La carte suit la langue de Home Assistant (français / anglais).
+
+### Luminosité et canaux (backend phs16lc récent, D23/D24)
+
+- Le **slider « Luminosité » dimme la recette active** : il envoie
+  `light.turn_on(brightness=…)` que l'intégration applique canal par canal en
+  conservant les rapports de la recette (jamais un courant uniforme). La valeur
+  affichée est le **% de la recette**. Sans recette choisie, le slider est
+  désactivé (l'intégration renverrait sinon une erreur explicite).
+- Les **sliders des 16 canaux sont bornés au max LED du canal** (attribut
+  `led_max`, ex. 1000 mA pour un canal FR) : on ne peut pas régler au-delà depuis
+  la carte — et de toute façon tout courant envoyé est clampé côté serveur.
+- Ancien backend (sans attribut `led_max`) : la carte retombe sur l'affichage
+  historique `brightness/255 (~mA)` et sliders canal 0–2150 mA.
 
 ## Tester sur l'instance HA de dev (macOS)
 

@@ -1,6 +1,15 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-22 — **release v1.0.0** (tag `v1.0.0`, subtree push
+> **Suivi** : 2026-11-24 — **v1.1.0 en dev** (branche `feature/dimmer-recette-led`
+> du workspace) : adaptation au backend D23/D24 — slider luminosité = variateur de
+> la recette active (affiché en %, désactivé sans recette, attribut `led_max` comme
+> détecteur de nouveau backend), sliders des 16 canaux bornés au max LED du canal,
+> carte groupe idem (détection via le `led_max` d'un membre). Rétrocompatible :
+> sans attribut `led_max`, ancien affichage `~mA` conservé. Harnais `test/index.html`
+> mocké à jour (LED_MAX, recette, channels_ma). Release v1.1.0 à taguer sur master
+> (subtree push `--prefix=ha-card card-dist master`) quand l'intégration D23/D24 est
+> mergée.
+> 2026-11-22 — **release v1.0.0** (tag `v1.0.0`, subtree push
 > `--prefix=ha-card card-dist master`). Branche de dev : `feature/carte-lovelace`
 > (mergée dans `develop`).
 > P0 fait (squelette, config `device:`/`entity:`, harness `test/index.html`).
