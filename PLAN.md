@@ -1,6 +1,9 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-25 — **v1.2.0 en dev** (branche `feature/led-spec-types`
+> **Suivi** : 2026-11-25 — **v1.2.1 releasée** (branche `feature/carte-types-1colonne`
+> mergée) : fix — sliders en une seule colonne (types de LED et 16 canaux), la grille
+> 2 colonnes dépassait de la carte. Smoke node 23 checks OK.
+> 2026-11-25 — **v1.2.0 en dev** (branche `feature/led-spec-types`
 > du workspace) : panneau déplié = **un slider par type de LED** (RE/WH/FR/BL)
 > quand l'attribut `led_types` est exposé (backend D25, `led_spec.json`) — envoi
 > du vecteur complet via `phs16lc.set_channels` ; repli sur les 16 sliders canal

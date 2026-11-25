@@ -124,7 +124,7 @@ const MDI_CLOSE =
 const MDI_TRASH =
   "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 
 // Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
 function _deleteRecipe(el, hass, root) {
@@ -675,7 +675,7 @@ class Phs16lcSpotCard extends HTMLElement {
       }
       html += `
         <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${sectionLabel}</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">${items}</div>
+        <div style="display:grid; grid-template-columns:1fr; gap:4px 16px;">${items}</div>
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input class="phs-recipe-name" type="text" placeholder="${_t(hass, "recipeName")}"
             style="flex:1; min-width:0; background:var(--card-background-color,#fff); color:var(--primary-text-color); border:1px solid var(--divider-color,#e0e0e0); border-radius:4px; padding:6px 8px; font-size:13px;">

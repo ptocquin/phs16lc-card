@@ -145,6 +145,7 @@ check("slider RE borné à 1400 mA", html.includes('data-type="RE" type="range" 
 check("slider WH borné à 1800 mA", html.includes('data-type="WH" type="range" min="0" max="1800"'));
 check("slider BL borné à 2000 mA", html.includes('data-type="BL" type="range" min="0" max="2000"'));
 check("tooltip RE = canaux C1, C4, C7, C11, C13, C16", html.includes("canaux C1, C4, C7, C11, C13, C16"));
+check("sliders en UNE seule colonne (v1.2.1, plus de dépassement)", html.includes("grid-template-columns:1fr;") && !html.includes("grid-template-columns:1fr 1fr"));
 check("slider actif (recette choisie)", !html.includes('value="200" disabled'));
 
 // ancien backend (led_max sans led_types) -> repli sur les 16 sliders canal
@@ -159,6 +160,7 @@ const html3 = lastCreated.querySelector(".phs-details").innerHTML;
 check("sans led_types : section « Canaux » + 16 sliders canal", html3.includes("Canaux (mA)") && (html3.match(/class="phs-channel" data-idx=/g) || []).length === 16);
 check("repli : slider canal 3 (FR) borné à 1000 mA", html3.includes('data-idx="2" type="range" min="0" max="1000"'));
 check("repli : slider canal 8 (BL) borné à 2000 mA", html3.includes('data-idx="7" type="range" min="0" max="2000"'));
+check("repli canaux : aussi une seule colonne", html3.includes("grid-template-columns:1fr;") && !html3.includes("grid-template-columns:1fr 1fr"));
 
 // show_channels: "channels" force la vue canal même avec led_types
 const card3b = new SpotCard();
@@ -196,7 +198,7 @@ check(
   gDetails.innerHTML.includes('class="phs-brightness"') && !gDetails.innerHTML.includes('value="180" disabled')
 );
 
-check("CARD_VERSION = 1.2.0", window.__phs16lcCardVersion === "1.2.0");
+check("CARD_VERSION = 1.2.1", window.__phs16lcCardVersion === "1.2.1");
 
 console.log(failures === 0 ? "SMOKE OK" : `SMOKE KO (${failures} échecs)`);
 process.exit(failures === 0 ? 0 : 1);
