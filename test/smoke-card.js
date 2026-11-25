@@ -170,6 +170,9 @@ card3b._expanded = true;
 card3b._render(true);
 const html3b = lastCreated.querySelector(".phs-details").innerHTML;
 check('show_channels: "channels" force les 16 sliders canal', (html3b.match(/class="phs-channel" data-idx=/g) || []).length === 16 && !html3b.includes("data-type="));
+check("étiquettes « 01_RE », « 03_FR », « 08_BL », « 16_RE » en mode canaux (v1.2.2)", ["01_RE", "03_FR", "08_BL", "16_RE"].every((l) => html3b.includes(">" + l + "<")));
+check("plus d'étiquette « C1 » quand led_types exposé", !html3b.includes(">C1<"));
+check("sans led_types : étiquette « C1 » conservée (rétrocompat)", html3.includes(">C1<") && !html3.includes(">01_"));
 
 // sans recette -> slider variateur désactivé
 const hass2 = JSON.parse(JSON.stringify(hass));
@@ -198,7 +201,7 @@ check(
   gDetails.innerHTML.includes('class="phs-brightness"') && !gDetails.innerHTML.includes('value="180" disabled')
 );
 
-check("CARD_VERSION = 1.2.1", window.__phs16lcCardVersion === "1.2.1");
+check("CARD_VERSION = 1.2.2", window.__phs16lcCardVersion === "1.2.2");
 
 console.log(failures === 0 ? "SMOKE OK" : `SMOKE KO (${failures} échecs)`);
 process.exit(failures === 0 ? 0 : 1);

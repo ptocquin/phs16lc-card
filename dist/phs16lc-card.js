@@ -124,7 +124,7 @@ const MDI_CLOSE =
 const MDI_TRASH =
   "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 
-const CARD_VERSION = "1.2.1";
+const CARD_VERSION = "1.2.2";
 
 // Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
 function _deleteRecipe(el, hass, root) {
@@ -662,9 +662,14 @@ class Phs16lcSpotCard extends HTMLElement {
         items = channels
           .map((ma, i) => {
             const cmax = ledMax ? ledMax[i] ?? 2150 : 2150;
+            // étiquette « 01_WH » (canal 2 chiffres + type de LED) si `led_types` exposé, sinon « C1 »
+            const label =
+              ledTypes && ledTypes[i]
+                ? `${String(i + 1).padStart(2, "0")}_${ledTypes[i]}`
+                : `C${i + 1}`;
             return `
         <div style="display:flex; align-items:center; gap:6px;">
-          <span style="font-size:11px; color:var(--secondary-text-color); width:24px;">C${i + 1}</span>
+          <span style="font-size:11px; color:var(--secondary-text-color); width:44px;">${label}</span>
           <input class="phs-channel" data-idx="${i}" type="range" min="0" max="${cmax}" step="10"
             value="${ma}" title="${ledMax ? _t(hass, "maxLed").replace("{ma}", cmax) : ""}"
             style="flex:1; accent-color:var(--primary-color);">

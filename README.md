@@ -1,5 +1,8 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
+> **v1.2.2 — 2026-11-25** : en vue 16 canaux, l'étiquette devant chaque slider
+> inclut le **type de LED** : `01_WH`, `03_FR`… (canal sur 2 chiffres + type, ex.
+> `led_types`) au lieu de `C1` ; sans `led_types` (vieux backend), `C1` conservé.
 > **v1.2.1 — 2026-11-25** : fix affichage — les sliders (par type de LED comme les
 > 16 canaux) passent en **une seule colonne** ; la grille 2 colonnes dépassait de la
 > carte vers la droite.

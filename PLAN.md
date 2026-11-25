@@ -1,6 +1,9 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-25 — **v1.2.1 releasée** (branche `feature/carte-types-1colonne`
+> **Suivi** : 2026-11-25 — **v1.2.2 releasée** (branche `feature/carte-label-canal-type`
+> mergée) : en vue 16 canaux, étiquette `01_WH` (2 chiffres + type LED via `led_types`)
+> au lieu de `C1` ; `C1` conservé sans `led_types`. Smoke node 26 checks OK.
+> 2026-11-25 — **v1.2.1 releasée** (branche `feature/carte-types-1colonne`
 > mergée) : fix — sliders en une seule colonne (types de LED et 16 canaux), la grille
 > 2 colonnes dépassait de la carte. Smoke node 23 checks OK.
 > 2026-11-25 — **v1.2.0 en dev** (branche `feature/led-spec-types`
