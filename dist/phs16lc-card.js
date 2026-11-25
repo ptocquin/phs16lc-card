@@ -6,7 +6,10 @@
 //   type: custom:phs16lc-spot-card
 //   device: SPOT 3            # résolution auto des entités via le device registry
 //   entity: light.spot_3      # (optionnel) surcharge du light principal
-//   show_channels: false      # (optionnel, défaut true) masque les 16 sliders canal
+//   show_channels: true       # (optionnel) true = auto : un slider par TYPE de LED
+//                             # (RE/WH/FR/BL) si le backend expose l'attribut `led_types`,
+//                             # sinon les 16 sliders canal ; "types"/"channels" = forcer ;
+//                             # false = masquer la section canaux
 
 const I18N = {
   fr: {
@@ -31,6 +34,8 @@ const I18N = {
     brightness: "Luminosité",
     channels: "Canaux",
     channel: "Canal",
+    ledTypes: "Types de LED",
+    typeChannels: "canaux {list}",
     ma: "mA",
     tempCpu: "CPU",
     save: "Sauvegarder NVM",
@@ -75,6 +80,8 @@ const I18N = {
     brightness: "Brightness",
     channels: "Channels",
     channel: "Channel",
+    ledTypes: "LED types",
+    typeChannels: "channels {list}",
     ma: "mA",
     tempCpu: "CPU",
     save: "Save NVM",
@@ -117,7 +124,7 @@ const MDI_CLOSE =
 const MDI_TRASH =
   "M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 // Suppression de la recette sélectionnée (service phs16lc.delete_recipe).
 function _deleteRecipe(el, hass, root) {
@@ -309,6 +316,24 @@ class Phs16lcSpotCard extends HTMLElement {
     });
   }
 
+  // Règle tous les canaux d'un type de LED (D25) à la même valeur : envoie le vecteur
+  // canal complet via phs16lc.set_channels (le clamp LED D24 reste appliqué serveur).
+  _setType(type, ev) {
+    const address = this._address();
+    if (!address) return;
+    const light = this._state("light");
+    const ledTypes =
+      light && light.attributes && Array.isArray(light.attributes.led_types)
+        ? light.attributes.led_types
+        : null;
+    const cs = this._state("currents");
+    const channels = cs && cs.attributes && cs.attributes.channels;
+    if (!ledTypes || !Array.isArray(channels)) return;
+    const v = parseInt(ev.target.value, 10);
+    const vec = channels.map((ma, i) => (i < ledTypes.length && ledTypes[i] === type ? v : ma));
+    this._hass.callService("phs16lc", "set_channels", { address, currents: vec });
+  }
+
   _selectOption(role, ev) {
     this._hass.callService("select", "select_option", {
       entity_id: this._ents[role],
@@ -352,7 +377,29 @@ class Phs16lcSpotCard extends HTMLElement {
     // positions des sliders telles qu'affichées (peuvent ne pas encore être reflétées
     // par le polling) ; sans sliders, le backend lira les courants du dernier poll
     const sliders = [...root.querySelectorAll(".phs-channel")];
-    if (sliders.length) data.currents = sliders.map((s) => s.value).join(",");
+    if (sliders.length) {
+      if (sliders.some((s) => s.dataset.type)) {
+        // sliders par type de LED (D25) : reconstruit le vecteur canal complet
+        const light = this._state("light");
+        const ledTypes =
+          light && light.attributes && Array.isArray(light.attributes.led_types)
+            ? light.attributes.led_types
+            : null;
+        const cs = this._state("currents");
+        const channels = cs && cs.attributes && cs.attributes.channels;
+        if (ledTypes && Array.isArray(channels)) {
+          const byType = {};
+          sliders.forEach((s) => {
+            byType[s.dataset.type] = s.value;
+          });
+          data.currents = channels
+            .map((ma, i) => (byType[ledTypes[i]] !== undefined ? byType[ledTypes[i]] : ma))
+            .join(",");
+        }
+      } else {
+        data.currents = sliders.map((s) => s.value).join(",");
+      }
+    }
     this._hass
       .callService("phs16lc", "save_recipe", data)
       .then(() => {
@@ -385,7 +432,7 @@ class Phs16lcSpotCard extends HTMLElement {
         const s = this._hass.states[id];
         if (!s) return null;
         const a = s.attributes || {};
-        return [s.state, a.brightness, a.channels, a.options, a.recette, a.led_max];
+        return [s.state, a.brightness, a.channels, a.options, a.recette, a.led_max, a.led_types];
       })
     );
   }
@@ -514,9 +561,16 @@ class Phs16lcSpotCard extends HTMLElement {
     const isDimmer = ledMax !== null;
     const activeRecipe = attrs.recette || null;
     const dimDisabled = isDimmer && !activeRecipe;
-    const showChannels = this._config.show_channels !== false;
     const currents = this._state("currents");
     const channels = currents && currents.attributes && currents.attributes.channels;
+    // D25 : un slider par type de LED (attribut `led_types`) plutôt que 16 sliders canal.
+    // `show_channels` : true/auto = types si `led_types` exposé, sinon canaux ;
+    // "types"/"channels" = forcer ; false = masquer.
+    const ledTypes = Array.isArray(attrs.led_types) ? attrs.led_types : null;
+    const sc = this._config.show_channels;
+    const showChannels = sc !== false && Array.isArray(channels) && channels.length > 0;
+    const byType =
+      showChannels && sc !== "channels" && ledTypes !== null && ledTypes.length === channels.length;
 
     // Ancien backend (sans `led_max`) : mapping luminosité HA (1-255) -> mA linéaire 74-2150.
     const maOf = (b) => Math.round(74 + (b / 255) * (2150 - 74));
@@ -567,14 +621,48 @@ class Phs16lcSpotCard extends HTMLElement {
     };
     html += selRow("recipe", "recipe") + selRow("group", "group");
 
-    // 16 sliders de canaux — bornés au max LED du canal quand le backend expose
+    // Sliders de canaux — bornés au max LED du canal quand le backend expose
     // `led_max` (D24 : le clamp est aussi appliqué côté serveur, le slider reflète
-    // la limite matérielle).
-    if (showChannels && Array.isArray(channels) && channels.length) {
-      const items = channels
-        .map((ma, i) => {
-          const cmax = ledMax ? ledMax[i] ?? 2150 : 2150;
-          return `
+    // la limite matérielle). D25 : si le backend expose `led_types`, un seul slider
+    // par type de LED (RE/WH/FR/BL) règle tous les canaux du type en même temps.
+    if (showChannels) {
+      let sectionLabel;
+      let items;
+      if (byType) {
+        const groups = [];
+        const indexOf = new Map();
+        ledTypes.forEach((t, i) => {
+          if (!indexOf.has(t)) {
+            indexOf.set(t, groups.length);
+            groups.push({ type: t, idx: [] });
+          }
+          groups[indexOf.get(t)].idx.push(i);
+        });
+        sectionLabel = _t(hass, "ledTypes");
+        items = groups
+          .map((g) => {
+            const cmax = Math.max(...g.idx.map((i) => (ledMax ? ledMax[i] ?? 2150 : 2150)));
+            const ma = channels[g.idx[0]];
+            const chans = g.idx.map((i) => "C" + (i + 1)).join(", ");
+            const title = `${_t(hass, "typeChannels").replace("{list}", chans)} — ${
+              ledMax ? _t(hass, "maxLed").replace("{ma}", cmax) : ""
+            }`;
+            return `
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; color:var(--secondary-text-color); width:24px; font-weight:600;">${g.type}</span>
+          <input class="phs-channel" data-type="${g.type}" type="range" min="0" max="${cmax}" step="10"
+            value="${ma}" title="${title}"
+            style="flex:1; accent-color:var(--primary-color);">
+          <span class="phs-channel-val" style="font-size:11px; color:var(--secondary-text-color); width:58px; text-align:right;">${ma} ${_t(hass, "ma")}</span>
+        </div>`;
+          })
+          .join("");
+      } else {
+        sectionLabel = `${_t(hass, "channels")} (${_t(hass, "ma")})`;
+        items = channels
+          .map((ma, i) => {
+            const cmax = ledMax ? ledMax[i] ?? 2150 : 2150;
+            return `
         <div style="display:flex; align-items:center; gap:6px;">
           <span style="font-size:11px; color:var(--secondary-text-color); width:24px;">C${i + 1}</span>
           <input class="phs-channel" data-idx="${i}" type="range" min="0" max="${cmax}" step="10"
@@ -582,10 +670,11 @@ class Phs16lcSpotCard extends HTMLElement {
             style="flex:1; accent-color:var(--primary-color);">
           <span class="phs-channel-val" style="font-size:11px; color:var(--secondary-text-color); width:58px; text-align:right;">${ma} ${_t(hass, "ma")}</span>
         </div>`;
-        })
-        .join("");
+          })
+          .join("");
+      }
       html += `
-        <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${_t(hass, "channels")} (${_t(hass, "ma")})</div>
+        <div style="font-size:13px; color:var(--secondary-text-color); margin:6px 0;">${sectionLabel}</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">${items}</div>
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input class="phs-recipe-name" type="text" placeholder="${_t(hass, "recipeName")}"
@@ -643,6 +732,7 @@ class Phs16lcSpotCard extends HTMLElement {
 
     root.querySelectorAll(".phs-channel").forEach((slider) => {
       const idx = parseInt(slider.dataset.idx, 10);
+      const type = slider.dataset.type || null;
       const val = slider.parentElement.querySelector(".phs-channel-val");
       slider.addEventListener("input", () => {
         val.textContent = `${slider.value} ${_t(hass, "ma")}`;
@@ -650,7 +740,8 @@ class Phs16lcSpotCard extends HTMLElement {
       slider.addEventListener("click", (ev) => ev.stopPropagation());
       slider.addEventListener("change", (ev) => {
         ev.stopPropagation();
-        this._setChannel(idx, ev);
+        if (type) this._setType(type, ev);
+        else this._setChannel(idx, ev);
       });
     });
 

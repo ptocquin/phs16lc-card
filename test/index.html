@@ -47,6 +47,9 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
   // Table max LED par canal (GUIDE intégration §10) — présente sur les lights depuis
   // le backend D24 ; sa présence fait passer la carte en mode « variateur de recette ».
   const LED_MAX = [1400, 1800, 1000, 1400, 1000, 1800, 1400, 2000, 1000, 1800, 1400, 2000, 1400, 1800, 1000, 1400];
+  // Type de LED par canal (D25, led_spec.json) — sa présence fait passer la carte en
+  // mode « un slider par type de LED » à la place des 16 sliders canal.
+  const LED_TYPES = ["RE", "WH", "FR", "RE", "FR", "WH", "RE", "BL", "FR", "WH", "RE", "BL", "RE", "WH", "FR", "RE"];
 
   // hass mocké : 2 devices SPOT avec toutes leurs entités phs16lc.
   window.hass = {
@@ -77,7 +80,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "select.serre_1_nord_recette": E("select.serre_1_nord_recette", "dev_g1", "recipe"),
     },
     states: {
-      "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200, recette: "floraison.json", led_max: LED_MAX, channels_ma: Array(16).fill(800) } },
+      "light.spot_3": { entity_id: "light.spot_3", state: "on", attributes: { friendly_name: "SPOT 3", brightness: 200, recette: "floraison.json", led_max: LED_MAX, led_types: LED_TYPES, channels_ma: Array(16).fill(800) } },
       "binary_sensor.spot_3_online": { entity_id: "binary_sensor.spot_3_online", state: "on", attributes: { friendly_name: "SPOT 3 En ligne" } },
       "sensor.spot_3_temperature_cpu": { entity_id: "sensor.spot_3_temperature_cpu", state: "29.5", attributes: { unit_of_measurement: "°C" } },
       "sensor.spot_3_temperature_led1": { entity_id: "sensor.spot_3_temperature_led1", state: "31.2", attributes: { unit_of_measurement: "°C" } },
@@ -87,7 +90,7 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
       "select.spot_3_groupe": { entity_id: "select.spot_3_groupe", state: "canaux_1_8", attributes: { options: ["canaux_1_8", "canaux_9_16"] } },
       "light.spot_7": { entity_id: "light.spot_7", state: "off", attributes: { friendly_name: "Luminaire nord" } },
       "binary_sensor.spot_7_online": { entity_id: "binary_sensor.spot_7_online", state: "off", attributes: {} },
-      "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128, recette: "croissance.json", led_max: LED_MAX } },
+      "light.spot_9": { entity_id: "light.spot_9", state: "on", attributes: { friendly_name: "SPOT 9", brightness: 128, recette: "croissance.json", led_max: LED_MAX, led_types: LED_TYPES } },
       "select.spot_9_recette": { entity_id: "select.spot_9_recette", state: "croissance.json", attributes: { options: ["croissance.json"] } },
       "binary_sensor.spot_9_online": { entity_id: "binary_sensor.spot_9_online", state: "off", attributes: {} },
       "light.serre_1_nord": { entity_id: "light.serre_1_nord", state: "on", attributes: { friendly_name: "serre_1_nord", brightness: 180, members: [3, 9] } },  // attribut `members` = source de vérité (backend >= v1.5.3)
@@ -110,6 +113,13 @@ Cliquer sur le bouton power appelle <code>light.turn_on/off</code> (mocké : bas
         const channels = [...s.attributes.channels];
         channels[data.channel - 1] = data.ma;
         window.hass.states["sensor.spot_3_courants"] = { ...s, attributes: { ...s.attributes, channels } };
+        refresh();
+      }
+      if (domain === "phs16lc" && service === "set_channels") {
+        // vecteur complet (ex. slider par type de LED, D25)
+        const s = window.hass.states["sensor.spot_3_courants"];
+        const currents = Array.isArray(data.currents) ? data.currents.map(Number) : String(data.currents).split(/[ ,]+/).map(Number);
+        window.hass.states["sensor.spot_3_courants"] = { ...s, attributes: { ...s.attributes, channels: currents } };
         refresh();
       }
       if (domain === "select" && service === "select_option") {

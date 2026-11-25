@@ -1,5 +1,11 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
+> **v1.2.0 — 2026-11-25** : panneau déplié = **un slider par type de LED**
+> (RE/WH/FR/BL) quand l'intégration expose l'attribut `led_types` (backend D25,
+> spec `led_spec.json`) : chaque slider règle **tous les canaux du type** en même
+> temps (via `phs16lc.set_channels`, vecteur complet) et est borné au max LED du
+> type ; les canaux couverts sont en tooltip. Sans `led_types` (ou
+> `show_channels: "channels"`), repli sur les 16 sliders canal bornés au `led_max`.
 > **v1.1.0 — 2026-11-24** : adaptation au backend D23/D24 — le slider luminosité
 > est un **variateur de la recette active** (affiché en % de la recette, désactivé
 > tant qu'aucune recette n'est choisie) et les 16 sliders canal sont **bornés au
@@ -60,11 +66,18 @@ La carte suit la langue de Home Assistant (français / anglais).
   conservant les rapports de la recette (jamais un courant uniforme). La valeur
   affichée est le **% de la recette**. Sans recette choisie, le slider est
   désactivé (l'intégration renverrait sinon une erreur explicite).
-- Les **sliders des 16 canaux sont bornés au max LED du canal** (attribut
-  `led_max`, ex. 1000 mA pour un canal FR) : on ne peut pas régler au-delà depuis
-  la carte — et de toute façon tout courant envoyé est clampé côté serveur.
+- Backend avec attribut `led_types` (D25) : la section affiche **un slider par
+  type de LED** (RE/WH/FR/BL), borné au max LED du type (ex. 1000 mA pour FR) ;
+  déplacer le slider applique la valeur à **tous les canaux de ce type** en même
+  temps (tooltip = canaux concernés, ex. « canaux C1, C4, C7, C11, C13, C16 »).
+- Backend avec `led_max` seul (D24) : les **16 sliders canal** sont bornés au max
+  LED du canal : on ne peut pas régler au-delà depuis la carte — et de toute
+  façon tout courant envoyé est clampé côté serveur.
 - Ancien backend (sans attribut `led_max`) : la carte retombe sur l'affichage
   historique `brightness/255 (~mA)` et sliders canal 0–2150 mA.
+- Option de config `show_channels` : `true` (défaut, auto : types si `led_types`
+  exposé, sinon canaux) · `"types"` / `"channels"` pour forcer · `false` pour
+  masquer la section.
 
 ## Tester sur l'instance HA de dev (macOS)
 

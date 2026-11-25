@@ -1,6 +1,12 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-24 — **v1.1.0 en dev** (branche `feature/dimmer-recette-led`
+> **Suivi** : 2026-11-25 — **v1.2.0 en dev** (branche `feature/led-spec-types`
+> du workspace) : panneau déplié = **un slider par type de LED** (RE/WH/FR/BL)
+> quand l'attribut `led_types` est exposé (backend D25, `led_spec.json`) — envoi
+> du vecteur complet via `phs16lc.set_channels` ; repli sur les 16 sliders canal
+> sinon, ou avec `show_channels: "channels"` ; `false` masque la section. Smoke
+> node à jour (21 checks OK). Release à taguer quand l'intégration D25 est mergée.
+> 2026-11-24 — **v1.1.0 en dev** (branche `feature/dimmer-recette-led`
 > du workspace) : adaptation au backend D23/D24 — slider luminosité = variateur de
 > la recette active (affiché en %, désactivé sans recette, attribut `led_max` comme
 > détecteur de nouveau backend), sliders des 16 canaux bornés au max LED du canal,
