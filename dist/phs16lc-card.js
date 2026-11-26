@@ -38,6 +38,8 @@ const I18N = {
     typeChannels: "canaux {list}",
     ma: "mA",
     tempCpu: "CPU",
+    fan: "Ventilateur",
+    fanCurve: "démarrage {low} °C · pleine vitesse {high} °C · seuil {duty} %",
     save: "Sauvegarder NVM",
     saveRecipe: "Enregistrer comme recette",
     recipeName: "Nom de la recette…",
@@ -84,6 +86,8 @@ const I18N = {
     typeChannels: "channels {list}",
     ma: "mA",
     tempCpu: "CPU",
+    fan: "Fan",
+    fanCurve: "start {low} °C · full speed {high} °C · threshold {duty} %",
     save: "Save NVM",
     saveRecipe: "Save as recipe",
     recipeName: "Recipe name…",
@@ -595,6 +599,20 @@ class Phs16lcSpotCard extends HTMLElement {
       })
       .join("<span style='margin:0 6px; color:var(--divider-color,#e0e0e0);'>|</span>");
     html += `<div style="display:flex; gap:6px; margin-bottom:10px;">${tempRow}</div>`;
+
+    // Ventilateur : paramètres programmés lus au polling par le backend (@GF,
+    // attributs `fan_*` du light — phs16-lc seul). Affichage seul : la
+    // reprogrammation (@SF) est une action rare, faite via le service
+    // phs16lc.set_fan_settings (Outils de développement → Actions).
+    if (attrs.fan_low_temp != null && attrs.fan_high_temp != null && attrs.fan_min_duty != null) {
+      const curve = _t(hass, "fanCurve")
+        .replace("{low}", attrs.fan_low_temp)
+        .replace("{high}", attrs.fan_high_temp)
+        .replace("{duty}", attrs.fan_min_duty);
+      html += `<div style="display:flex; gap:6px; margin-bottom:10px;">
+        <span style="font-size:12px; color:var(--secondary-text-color);">${_t(hass, "fan")} : ${curve}</span>
+      </div>`;
+    }
 
     // Selects recette / groupe (le sélecteur recette a un bouton de suppression).
     const selRow = (role, labelKey) => {

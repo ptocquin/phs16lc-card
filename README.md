@@ -1,5 +1,12 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
+> **v1.2.3 — en dev (branche `feature/fan-settings`) — 2026-11-26** : vue dépliée
+> de la carte SPOT — sous les températures CPU/LED, affichage des **paramètres
+> ventilateur** lus par l'intégration (`@GF`, attributs `fan_low_temp` /
+> `fan_high_temp` / `fan_min_duty` de la lampe, phs16-lc seul) :
+> « Ventilateur : démarrage 40 °C · pleine vitesse 60 °C · seuil 30 % ».
+> Affichage seul — la reprogrammation (`@SF`) reste réservée au service
+> `phs16lc.set_fan_settings` (action rare, pas de contrôle dans la carte).
 > **v1.2.2 — 2026-11-25** : en vue 16 canaux, l'étiquette devant chaque slider
 > inclut le **type de LED** : `01_WH`, `03_FR`… (canal sur 2 chiffres + type, ex.
 > `led_types`) au lieu de `C1` ; sans `led_types` (vieux backend), `C1` conservé.
