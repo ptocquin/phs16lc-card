@@ -1,10 +1,12 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
 > **Suivi** : 2026-11-26 — **v1.2.3 en dev** (branche `feature/fan-settings`
-> du workspace) : vue dépliée de la carte SPOT — ligne « Ventilateur » sous les
-> températures, depuis les attributs `fan_low_temp` / `fan_high_temp` /
-> `fan_min_duty` exposés par l'intégration (polling `@GF`, phs16-lc seul).
+> du workspace) : vue dépliée de la carte SPOT — ligne ventilateur **compacte**
+> « Vi 40° · Vmax 60° · Vduty 30% » sous les températures (attributs `fan_low_temp` /
+> `fan_high_temp` / `fan_min_duty`, polling `@GF`, phs16-lc seul ; détail en tooltip) ;
+> le % du slider luminosité passe en « x % » (ne déborde plus de la carte).
 > Affichage seul ; reprogrammation via le service `phs16lc.set_fan_settings`.
+> Smoke node : 28 checks OK.
 > 2026-11-25 — **v1.2.2 releasée** (branche `feature/carte-label-canal-type`
 > mergée) : en vue 16 canaux, étiquette `01_WH` (2 chiffres + type LED via `led_types`)
 > au lieu de `C1` ; `C1` conservé sans `led_types`. Smoke node 26 checks OK.

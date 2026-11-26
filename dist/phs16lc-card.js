@@ -24,7 +24,6 @@ const I18N = {
     noRecipe: "Aucune recette",
     ledTemp: "LED",
     max: "max",
-    pctOfRecipe: "{pct} % de la recette",
     dimmerHint: "Le curseur dimme la recette active — choisissez d'abord une recette",
     maxLed: "max LED {ma} mA",
     powerOn: "Allumer",
@@ -39,7 +38,8 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     fan: "Ventilateur",
-    fanCurve: "démarrage {low} °C · pleine vitesse {high} °C · seuil {duty} %",
+    fanCurve: "Vi {low}° · Vmax {high}° · Vduty {duty}%",
+    fanHint: "démarrage {low} °C · pleine vitesse {high} °C · seuil {duty} %",
     save: "Sauvegarder NVM",
     saveRecipe: "Enregistrer comme recette",
     recipeName: "Nom de la recette…",
@@ -72,7 +72,6 @@ const I18N = {
     noRecipe: "No recipe",
     ledTemp: "LED",
     max: "max",
-    pctOfRecipe: "{pct} % of recipe",
     dimmerHint: "The slider dims the active recipe — pick a recipe first",
     maxLed: "LED max {ma} mA",
     powerOn: "Turn on",
@@ -87,7 +86,8 @@ const I18N = {
     ma: "mA",
     tempCpu: "CPU",
     fan: "Fan",
-    fanCurve: "start {low} °C · full speed {high} °C · threshold {duty} %",
+    fanCurve: "Vi {low}° · Vmax {high}° · Vduty {duty}%",
+    fanHint: "start {low} °C · full speed {high} °C · threshold {duty} %",
     save: "Save NVM",
     saveRecipe: "Save as recipe",
     recipeName: "Recipe name…",
@@ -587,7 +587,7 @@ class Phs16lcSpotCard extends HTMLElement {
           value="${brightness}"${dimDisabled ? " disabled" : ""}
           title="${dimDisabled ? _t(hass, "dimmerHint") : ""}"
           style="flex:1; accent-color:var(--primary-color);">
-        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
+        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:48px; text-align:right;"></span>
       </div>`;
 
     // Températures détaillées.
@@ -601,16 +601,20 @@ class Phs16lcSpotCard extends HTMLElement {
     html += `<div style="display:flex; gap:6px; margin-bottom:10px;">${tempRow}</div>`;
 
     // Ventilateur : paramètres programmés lus au polling par le backend (@GF,
-    // attributs `fan_*` du light — phs16-lc seul). Affichage seul : la
-    // reprogrammation (@SF) est une action rare, faite via le service
-    // phs16lc.set_fan_settings (Outils de développement → Actions).
+    // attributs `fan_*` du light — phs16-lc seul). Affichage compact (Vi/Vmax/Vduty),
+    // le détail en tooltip. Affichage seul : la reprogrammation (@SF) est une
+    // action rare, faite via le service phs16lc.set_fan_settings.
     if (attrs.fan_low_temp != null && attrs.fan_high_temp != null && attrs.fan_min_duty != null) {
       const curve = _t(hass, "fanCurve")
         .replace("{low}", attrs.fan_low_temp)
         .replace("{high}", attrs.fan_high_temp)
         .replace("{duty}", attrs.fan_min_duty);
+      const hint = `${_t(hass, "fan")} — ${_t(hass, "fanHint")
+        .replace("{low}", attrs.fan_low_temp)
+        .replace("{high}", attrs.fan_high_temp)
+        .replace("{duty}", attrs.fan_min_duty)}`;
       html += `<div style="display:flex; gap:6px; margin-bottom:10px;">
-        <span style="font-size:12px; color:var(--secondary-text-color);">${_t(hass, "fan")} : ${curve}</span>
+        <span title="${hint}" style="font-size:12px; color:var(--secondary-text-color);">${curve}</span>
       </div>`;
     }
 
@@ -724,8 +728,8 @@ class Phs16lcSpotCard extends HTMLElement {
       if (v === 0) {
         bVal.textContent = _t(hass, "off");
       } else if (isDimmer) {
-        // D23 : le slider affiche le % de la recette active
-        bVal.textContent = _t(hass, "pctOfRecipe").replace("{pct}", pctOf(v));
+        // D23 : le slider affiche le % de la recette active (compact : « x % »)
+        bVal.textContent = `${pctOf(v)} %`;
       } else {
         bVal.textContent = `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
       }
@@ -1156,7 +1160,7 @@ class Phs16lcGroupCard extends HTMLElement {
       brightness != null
         ? `<span>${
             groupDimmer
-              ? _t(hass, "pctOfRecipe").replace("{pct}", Math.round((brightness / 255) * 100))
+              ? `${Math.round((brightness / 255) * 100)} %`
               : `${brightness}/255 (~${maOf(brightness)} ${_t(hass, "ma")})`
           }</span>`
         : "";
@@ -1227,7 +1231,7 @@ class Phs16lcGroupCard extends HTMLElement {
         <input class="phs-brightness" type="range" min="0" max="255" step="1" value="${brightness}"
           ${dimDisabled ? "disabled" : ""} title="${dimDisabled ? _t(hass, "dimmerHint") : ""}"
           style="flex:1; accent-color:var(--primary-color);">
-        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:110px; text-align:right;"></span>
+        <span class="phs-brightness-val" style="font-size:12px; color:var(--secondary-text-color); min-width:48px; text-align:right;"></span>
       </div>`;
 
     const recipe = this._state("recipe");
@@ -1305,7 +1309,7 @@ class Phs16lcGroupCard extends HTMLElement {
       if (v === 0) {
         bVal.textContent = _t(hass, "off");
       } else if (isDimmer) {
-        bVal.textContent = _t(hass, "pctOfRecipe").replace("{pct}", pctOf(v));
+        bVal.textContent = `${pctOf(v)} %`;
       } else {
         bVal.textContent = `${v}/255 (~${maOf(v)} ${_t(hass, "ma")})`;
       }

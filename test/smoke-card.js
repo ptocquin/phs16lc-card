@@ -90,6 +90,9 @@ const hass = {
         led_max: LED_MAX,
         led_types: LED_TYPES,
         channels_ma: Array(16).fill(800),
+        fan_low_temp: 40,
+        fan_high_temp: 60,
+        fan_min_duty: 30,
       },
     },
     "binary_sensor.spot_3_online": { entity_id: "binary_sensor.spot_3_online", state: "on", attributes: {} },
@@ -136,7 +139,9 @@ const details = cardEl.querySelector(".phs-details");
 const html = details.innerHTML;
 check("slider brightness présent", html.includes('class="phs-brightness"'));
 const bVal = details._cache.get(".phs-brightness-val");
-check("valeur slider = % de la recette (200/255 -> 78 %)", bVal && bVal.textContent === "78 % de la recette");
+check("valeur slider = % compact (200/255 -> 78 %)", bVal && bVal.textContent === "78 %");
+check("ligne ventilateur compacte (Vi 40° · Vmax 60° · Vduty 30%)", html.includes("Vi 40° · Vmax 60° · Vduty 30%"));
+check("tooltip ventilateur détaillé", html.includes("démarrage 40 °C · pleine vitesse 60 °C · seuil 30 %"));
 check("section « Types de LED » (D25)", html.includes("Types de LED"));
 check("4 sliders par type de LED (RE/WH/FR/BL)", (html.match(/class="phs-channel" data-type=/g) || []).length === 4);
 check("pas de slider canal individuel en mode types", !html.includes("data-idx="));
@@ -194,7 +199,7 @@ gcard.hass = hass;
 gcard._expanded = true;
 gcard._render(true);
 const gHtml = lastCreated.innerHTML;
-check("puce groupe = % de la recette (180/255 -> 71 %)", gHtml.includes("71 % de la recette"));
+check("puce groupe = % compact (180/255 -> 71 %)", gHtml.includes("71 %") && !gHtml.includes("71 % de la recette"));
 const gDetails = lastCreated.querySelector(".phs-details");
 check(
   "slider groupe présent et actif (recette du groupe choisie)",
