@@ -1,6 +1,6 @@
 # PHS16-LC Card — carte Lovelace custom pour les luminaires PHS16-LC
 
-> **v1.2.3 — en dev (branche `feature/fan-settings`) — 2026-11-26** : vue dépliée
+> **v1.2.3 — 2026-11-26** : vue dépliée
 > de la carte SPOT — sous les températures CPU/LED, affichage **compact** des
 > paramètres ventilateur lus par l'intégration (`@GF`, attributs `fan_low_temp` /
 > `fan_high_temp` / `fan_min_duty` de la lampe, phs16-lc seul) :

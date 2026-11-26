@@ -1,7 +1,7 @@
 # Plan de développement — Carte Lovelace custom PHS16-LC (`ha-card/`)
 
-> **Suivi** : 2026-11-26 — **v1.2.3 en dev** (branche `feature/fan-settings`
-> du workspace) : vue dépliée de la carte SPOT — ligne ventilateur **compacte**
+> **Suivi** : 2026-11-26 — **v1.2.3 releasée** (branche `feature/fan-settings`
+> mergée dans develop) : vue dépliée de la carte SPOT — ligne ventilateur **compacte**
 > « Vi 40° · Vmax 60° · Vduty 30% » sous les températures (attributs `fan_low_temp` /
 > `fan_high_temp` / `fan_min_duty`, polling `@GF`, phs16-lc seul ; détail en tooltip) ;
 > le % du slider luminosité passe en « x % » (ne déborde plus de la carte).

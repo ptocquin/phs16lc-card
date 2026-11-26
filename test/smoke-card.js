@@ -206,7 +206,7 @@ check(
   gDetails.innerHTML.includes('class="phs-brightness"') && !gDetails.innerHTML.includes('value="180" disabled')
 );
 
-check("CARD_VERSION = 1.2.2", window.__phs16lcCardVersion === "1.2.2");
+check("CARD_VERSION = 1.2.3", window.__phs16lcCardVersion === "1.2.3");
 
 console.log(failures === 0 ? "SMOKE OK" : `SMOKE KO (${failures} échecs)`);
 process.exit(failures === 0 ? 0 : 1);
